@@ -11,7 +11,7 @@ not_found_handling = "single-page-application"
 
 [vars]
 # Public VAPID key (safe to expose). Generate via: pnpm gen:vapid
-VAPID_PUBLIC_KEY = "BCu3hyLSNBwGPpeueHweAdxbyFrRF5xbQu77-w2gZR9oHQ5-BUmrNDx1jPPt--5_L7yS1RrpgMN_opWX0vaVHjw"
+VAPID_PUBLIC_KEY = "BDQ3LhHgetvqdYQkQjwPKoC9oxF5CasV8fC9yl3u8hHiwKHsZkNEMLxp-HsBIrNHGoySKH7YivDiwvAzGsbWGuI"
 VAPID_SUBJECT = "mailto:admin@example.com"
 
 # Durable Object for one game.
