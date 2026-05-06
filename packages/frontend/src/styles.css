@@ -257,6 +257,64 @@ a:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+  align-items: stretch;
+}
+
+.hand-card {
+  /* The wrapper sits in the layout slot; CardFace inside has the visual style. */
+  display: inline-flex;
+  cursor: grab;
+  /* Block default touch behaviors (pan/zoom) so we can own the drag gesture. */
+  touch-action: none;
+  /* Smooth re-snap when a reorder commits. */
+  transition: transform 0.12s ease;
+}
+.hand-card:active {
+  cursor: grabbing;
+}
+.hand-card-dragging {
+  cursor: grabbing;
+  transition: none;
+  pointer-events: none;
+}
+
+.drop-indicator {
+  display: inline-block;
+  width: 4px;
+  align-self: stretch;
+  min-height: 80px;
+  margin: 2px 0;
+  border-radius: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+  animation: drop-indicator-pulse 0.7s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+@keyframes drop-indicator-pulse {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.hand-header {
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.4rem;
+}
+.hand-header h2 {
+  margin: 0;
+}
+.hand-reset {
+  font-size: 0.85rem;
+  padding: 0.2rem 0.55rem;
+}
+.hand-hint {
+  font-size: 0.78rem;
+  margin-left: auto;
 }
 
 /* ---- Pile (stock + discard) ---- */

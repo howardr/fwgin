@@ -19,6 +19,10 @@ export function Game({ gameId, onNavigate }: { gameId: string; onNavigate(hash: 
   const [joining, setJoining] = useState(false);
   const { view, connected, error, send, chat } = useGameSocket(gameId);
   const [selected, setSelected] = useState<CardId[]>([]);
+  // Player's local hand ordering. Empty array = use the default suit/rank sort. Set
+  // when the player drags cards in their hand to organize them. Reset on round change
+  // (new deal) but preserved across phases within the same round.
+  const [customOrder, setCustomOrder] = useState<CardId[]>([]);
 
   // Initial fetch of the lobby record.
   useEffect(() => {
@@ -85,6 +89,14 @@ export function Game({ gameId, onNavigate }: { gameId: string; onNavigate(hash: 
     setSelected([]);
   }, [view?.round, view?.phase]);
 
+  // When a new round starts the deck is reshuffled and the player gets a fresh hand,
+  // so any previous custom ordering no longer applies. Phase changes within a round
+  // (in_round <-> awaiting_upcard) preserve the order.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: setCustomOrder is stable
+  useEffect(() => {
+    setCustomOrder([]);
+  }, [view?.round]);
+
   if (lobbyError) {
     return (
       <main className="container">
@@ -134,6 +146,8 @@ export function Game({ gameId, onNavigate }: { gameId: string; onNavigate(hash: 
       chat={chat}
       selected={selected}
       setSelected={setSelected}
+      customOrder={customOrder}
+      setCustomOrder={setCustomOrder}
       onBack={() => onNavigate('#/')}
     />
   );
@@ -251,6 +265,8 @@ interface TableProps {
   chat: { fromName: string; text: string; at: number }[];
   selected: CardId[];
   setSelected: (s: CardId[]) => void;
+  customOrder: CardId[];
+  setCustomOrder: (s: CardId[]) => void;
   onBack(): void;
 }
 
@@ -263,6 +279,8 @@ function Table({
   chat,
   selected,
   setSelected,
+  customOrder,
+  setCustomOrder,
   onBack,
 }: TableProps) {
   if (!view) {
@@ -428,12 +446,27 @@ function Table({
 
       {isPlayer && (
         <section className="card-section">
-          <h2>Your hand</h2>
+          <div className="row hand-header">
+            <h2>Your hand</h2>
+            {customOrder.length > 0 && (
+              <button
+                type="button"
+                className="ghost hand-reset"
+                onClick={() => setCustomOrder([])}
+                title="Restore the default suit/rank sort"
+              >
+                Sort
+              </button>
+            )}
+            <span className="muted hand-hint">Drag to reorder</span>
+          </div>
           <Hand
             hand={(view as PlayerView).yourHand}
             selected={selected}
             wildRank={view.wildRank as Rank | null}
+            customOrder={customOrder}
             onToggle={toggleSelected}
+            onReorder={setCustomOrder}
           />
           <div className="actions">
             {view.phase === 'awaiting_upcard' && isYourTurn && (
