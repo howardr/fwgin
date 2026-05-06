@@ -104,6 +104,11 @@ export async function handleGetGame(
     .bind(gameId)
     .all<{ id: string; seat: number; displayName: string; joinedAt: number }>();
 
+  // The REST endpoint has no view of live WebSocket sessions, so presence defaults to
+  // false here. The frontend's WS live-merge fills in real values within a few hundred
+  // milliseconds of the lobby loading.
+  const playersWithPresence = players.results.map((p) => ({ ...p, online: false }));
+
   return jsonResponse(
     {
       id: row.id,
@@ -112,8 +117,8 @@ export async function handleGetGame(
       config: JSON.parse(row.config_json),
       inviteCode: row.inviteCode,
       createdAt: row.createdAt,
-      players: players.results,
-      youAre: players.results.find((p) => p.id === ctx.user.id)
+      players: playersWithPresence,
+      youAre: playersWithPresence.find((p) => p.id === ctx.user.id)
         ? { kind: 'player', id: ctx.user.id }
         : { kind: 'spectator' },
     },

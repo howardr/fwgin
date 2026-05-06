@@ -41,8 +41,6 @@ export interface Player {
   id: PlayerId;
   displayName: string;
   seat: number;
-  /** Whether the player is currently connected via WS. Informational only. */
-  online: boolean;
 }
 
 export type MeldKind = 'set' | 'run';
@@ -136,12 +134,19 @@ export interface GameState {
   createdAt: number;
 }
 
+/**
+ * Per-player info exposed in views. `online` reflects whether the player currently has at
+ * least one open WebSocket connection to the game's Durable Object — the engine itself
+ * doesn't know about WS lifecycles, so the DO injects this field before broadcasting.
+ */
+export type PlayerInView = Player & { handCount: number; online: boolean };
+
 /** What a seated player is allowed to see. */
 export interface PlayerView {
   kind: 'player';
   id: GameId;
   config: GameConfig;
-  players: (Player & { handCount: number })[];
+  players: PlayerInView[];
   hostId: PlayerId;
   phase: GamePhase;
   round: number;
