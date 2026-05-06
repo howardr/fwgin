@@ -3,12 +3,16 @@
  * is highlighted.
  */
 
-import type { Player, PlayerId } from '@fwgin/shared';
+import { type Player, type PlayerId, type Rank, wildRankForRound } from '@fwgin/shared';
 
 export interface ScoreboardProps {
   players: Player[];
   scores: Record<PlayerId, number[]>;
   currentRound: number;
+}
+
+function displayRank(r: Rank): string {
+  return r === 'T' ? '10' : r;
 }
 
 export function Scoreboard({ players, scores, currentRound }: ScoreboardProps) {
@@ -26,11 +30,18 @@ export function Scoreboard({ players, scores, currentRound }: ScoreboardProps) {
         <thead>
           <tr>
             <th>Player</th>
-            {Array.from({ length: 13 }, (_, i) => (
-              <th key={`r${i + 1}`} className={i + 1 === currentRound ? 'col-current' : ''}>
-                {i + 1}
-              </th>
-            ))}
+            {Array.from({ length: 13 }, (_, i) => {
+              const round = i + 1;
+              return (
+                <th
+                  key={`r${round}`}
+                  className={round === currentRound ? 'col-current' : ''}
+                  title={`Round ${round}`}
+                >
+                  {displayRank(wildRankForRound(round))}
+                </th>
+              );
+            })}
             <th>Total</th>
           </tr>
         </thead>
