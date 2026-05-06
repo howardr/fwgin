@@ -1,0 +1,25 @@
+packages/worker/src/do/GameDO.ts
+  1fe86370e16547df 335-339
+packages/frontend/src/screens/Game.tsx
+  1fe86370e16547df 19,23,31-81,112-113,145-146,152-153,168-172,174,201-203,207-215,231
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "a576a5f8db188ced1070e0977969461e93d20966",
+  "prompts": {
+    "1fe86370e16547df": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_201a41955ffekJINl0pbuwrwe3",
+        "model": "anthropic/claude-opus-4-7"
+      },
+      "human_author": "Howard Rauscher",
+      "messages": [],
+      "total_additions": 83,
+      "total_deletions": 6,
+      "accepted_lines": 83,
+      "overriden_lines": 0
+    }
+  }
+}
