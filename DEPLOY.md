@@ -38,13 +38,25 @@ Production:
 pnpm -F @fwgin/worker db:migrate:remote
 ```
 
-## 3. Generate VAPID keys (for Web Push)
+## 3. Set up secrets (VAPID for Web Push, session secret)
+
+> **Important**: every `wrangler secret put` command must be run from inside the
+> `packages/worker/` directory (or with `--config packages/worker/wrangler.toml`),
+> otherwise wrangler can't find the worker config and will error out.
+>
+> `wrangler secret put NAME` is **interactive** — it prompts you to type/paste the
+> value and press Enter. The recipes below use shell pipes so you don't have to deal
+> with the prompt at all.
+
+### 3a. Generate VAPID keys
+
+From the repo root:
 
 ```sh
 pnpm gen:vapid
 ```
 
-Output:
+That prints something like:
 
 ```
 Public key (set in wrangler.toml [vars]):
@@ -54,15 +66,45 @@ Private key (set as a Worker secret):
   echo 'X9...truncated...' | wrangler secret put VAPID_PRIVATE_KEY
 ```
 
-- Paste the public key into `[vars]` in `wrangler.toml`.
-- Set the private key as a Worker secret. You can paste the printed `wrangler secret put`
-  command directly (run it from the `packages/worker` directory).
+### 3b. Public key → wrangler.toml
 
-You also need a session secret:
+Open [`packages/worker/wrangler.toml`](./packages/worker/wrangler.toml), find the `[vars]`
+block, and paste the public key as the value of `VAPID_PUBLIC_KEY`:
+
+```toml
+[vars]
+VAPID_PUBLIC_KEY = "BHabc...your_public_key..."
+VAPID_SUBJECT = "mailto:you@example.com"
+```
+
+Commit this change — the public key is safe to commit.
+
+### 3c. Private key → Worker secret
 
 ```sh
-openssl rand -base64 32 | wrangler secret put SESSION_SECRET --config packages/worker/wrangler.toml
+cd packages/worker
+echo 'X9...your_private_key...' | pnpm exec wrangler secret put VAPID_PRIVATE_KEY
 ```
+
+Wrangler responds with `🌀 Creating the secret for the Worker "fwgin"`.
+
+### 3d. Session secret
+
+The session secret signs cookies. Any 32+ bytes of randomness work; here's a one-liner:
+
+```sh
+cd packages/worker
+openssl rand -base64 32 | pnpm exec wrangler secret put SESSION_SECRET
+```
+
+### 3e. Verify both secrets are set
+
+```sh
+cd packages/worker
+pnpm exec wrangler secret list
+```
+
+You should see `VAPID_PRIVATE_KEY` and `SESSION_SECRET` in the output.
 
 ## 4. First manual deploy (optional but recommended)
 
