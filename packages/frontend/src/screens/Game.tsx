@@ -296,6 +296,8 @@ function Table({
         />
       </header>
 
+      {view.phase === 'game_over' && <GameOverBanner view={view} />}
+
       {error && <p className="error">{error}</p>}
 
       <section className="card-section">
@@ -431,6 +433,35 @@ function Table({
         </section>
       )}
     </main>
+  );
+}
+
+function GameOverBanner({ view }: { view: ViewForClient }) {
+  const totals = new Map<string, number>();
+  for (const p of view.players) {
+    totals.set(
+      p.id,
+      (view.scores[p.id] ?? []).reduce((a, b) => a + b, 0),
+    );
+  }
+  const min = Math.min(...totals.values());
+  const winners = view.players.filter((p) => totals.get(p.id) === min);
+  return (
+    <section className="card-section game-over">
+      <h2>Game Over</h2>
+      <p>
+        {winners.length === 1 ? (
+          <>
+            <strong>{winners[0]?.displayName}</strong> wins with {min} points!
+          </>
+        ) : (
+          <>
+            Tie! Shared win for <strong>{winners.map((w) => w.displayName).join(', ')}</strong> at{' '}
+            {min} points.
+          </>
+        )}
+      </p>
+    </section>
   );
 }
 

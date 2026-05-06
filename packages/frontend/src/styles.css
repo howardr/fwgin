@@ -481,3 +481,11 @@ a:hover {
 .chat li {
   padding: 0.2rem 0;
 }
+
+.game-over {
+  border-color: var(--success);
+  background: rgba(52, 211, 153, 0.08);
+}
+.game-over h2 {
+  color: var(--success);
+}

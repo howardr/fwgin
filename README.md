@@ -72,15 +72,23 @@ pnpm lint         # biome check
 
 ## Deployment
 
-Production deploys are driven by **Workers Builds** (connected to this GitHub repo).
-The build step runs `pnpm install && pnpm build`, which produces:
+Step-by-step instructions live in [`DEPLOY.md`](./DEPLOY.md). Short version:
 
-- `packages/frontend/dist` — bundled React SPA.
-- `packages/worker/dist` — bundled Worker (which serves the SPA via static asset binding).
+1. `pnpm dlx wrangler d1 create fwgin`, copy the `database_id` into `packages/worker/wrangler.toml`.
+2. `pnpm -F @fwgin/worker db:migrate:remote` to apply the schema.
+3. `pnpm gen:vapid` to mint a VAPID keypair; put the public key in `wrangler.toml` `[vars]`,
+   set the private one as a Worker secret.
+4. Connect the GitHub repo to **Workers Builds** in the Cloudflare dashboard.
 
-Secrets (`SESSION_SECRET`, `VAPID_PRIVATE_KEY`) are set via the Cloudflare dashboard or
-`wrangler secret put`. Public values like `VAPID_PUBLIC_KEY` go in `wrangler.toml`'s
-`[vars]`. See [`packages/worker/wrangler.toml`](./packages/worker/wrangler.toml).
+## Project status
+
+- ✅ Pure game engine: 31 unit tests covering melds, wild stealing, scoring, layoffs,
+  going out, auto-play, and the card-conservation invariant.
+- ✅ Worker + Durable Object: routes, sessions, lobby, hibernating WebSockets, alarm-driven
+  auto-play, integration tests via `@cloudflare/vitest-pool-workers`.
+- ✅ React SPA: landing, lobby, full table view, scoreboard, event log.
+- ✅ Web Push (VAPID + aes128gcm) implemented end-to-end on Workers using only Web Crypto.
+- ✅ GitHub Actions CI (lint + typecheck + test + build).
 
 ## License
 
