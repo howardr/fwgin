@@ -1,0 +1,38 @@
+name = "fwgin"
+main = "src/index.ts"
+compatibility_date = "2026-04-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Serve the React SPA from the same Worker.
+[assets]
+directory = "../frontend/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+[vars]
+# Public VAPID key (safe to expose). Generate via: pnpm gen:vapid
+VAPID_PUBLIC_KEY = ""
+VAPID_SUBJECT = "mailto:admin@example.com"
+
+# Durable Object for one game.
+[[durable_objects.bindings]]
+name = "GAME"
+class_name = "GameDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["GameDO"]
+
+# D1 for users / lobby / archives.
+[[d1_databases]]
+binding = "DB"
+database_name = "fwgin"
+database_id = "REPLACE_AFTER_CREATING_VIA_WRANGLER_D1_CREATE"
+migrations_dir = "migrations"
+
+# Secrets to set via `wrangler secret put`:
+#   SESSION_SECRET       - 32+ byte random string for signing session cookies
+#   VAPID_PRIVATE_KEY    - base64url-encoded P-256 private key (printed by gen-vapid)
+
+[observability]
+enabled = true

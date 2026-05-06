@@ -1,0 +1,28 @@
+{
+  "name": "fwgin",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Fort Worth Gin online — multiplayer card game on Cloudflare Workers + Durable Objects",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@10.3.0",
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm -F @fwgin/worker dev",
+    "dev:frontend": "pnpm -F @fwgin/frontend dev",
+    "test": "pnpm -r test",
+    "test:engine": "pnpm -F @fwgin/engine test",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "typecheck": "pnpm -r typecheck",
+    "deploy": "pnpm -F @fwgin/worker deploy",
+    "gen:vapid": "node scripts/gen-vapid.mjs"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "typescript": "^5.6.3"
+  }
+}

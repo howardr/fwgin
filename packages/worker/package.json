@@ -1,0 +1,28 @@
+{
+  "name": "@fwgin/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "build": "pnpm -F @fwgin/frontend build && wrangler deploy --dry-run --outdir dist",
+    "dev": "wrangler dev",
+    "deploy": "pnpm -F @fwgin/frontend build && wrangler deploy",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "db:migrate:local": "wrangler d1 migrations apply fwgin --local",
+    "db:migrate:remote": "wrangler d1 migrations apply fwgin --remote"
+  },
+  "dependencies": {
+    "@fwgin/engine": "workspace:*",
+    "@fwgin/shared": "workspace:*",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.5.36",
+    "@cloudflare/workers-types": "^4.20241112.0",
+    "typescript": "^5.6.3",
+    "vitest": "2.1.8",
+    "wrangler": "^3.90.0"
+  }
+}
