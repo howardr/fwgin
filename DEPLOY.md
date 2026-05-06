@@ -111,9 +111,14 @@ You should see `VAPID_PRIVATE_KEY` and `SESSION_SECRET` in the output.
 From the repo root:
 
 ```sh
-pnpm -F @fwgin/frontend build
-pnpm -F @fwgin/worker deploy
+pnpm -F @fwgin/worker release
 ```
+
+The `release` script (in `packages/worker/package.json`) builds the frontend then runs
+`wrangler deploy`. The script is named `release` rather than `deploy` because
+`pnpm deploy` is a pnpm builtin (it packages a workspace into a target directory) and
+would shadow any `deploy` script — calling `pnpm -F @fwgin/worker deploy` would fail
+with `ERR_PNPM_INVALID_DEPLOY_TARGET`.
 
 The Worker is then available at `https://fwgin.<your-subdomain>.workers.dev`.
 
@@ -132,13 +137,31 @@ In the Cloudflare dashboard:
 
 1. **Workers & Pages → Create → Connect to Git**
 2. Pick the `howardr/fwgin` repository.
-3. Build configuration:
+3. Build configuration (these settings are **all required** — the defaults will not work
+   for this monorepo, see the troubleshooting section below):
    - **Root directory**: leave blank (the repo root).
    - **Build command**: `pnpm install --frozen-lockfile && pnpm -F @fwgin/frontend build`
-   - **Deploy command**: `pnpm -F @fwgin/worker deploy`
+   - **Deploy command**: `pnpm -F @fwgin/worker exec wrangler deploy`
    - **Branch**: `main`
 4. Save and trigger an initial build. Subsequent pushes to `main` will deploy automatically;
    pull requests get a preview deployment.
+
+> **Two pitfalls the defaults / obvious-looking commands hit, and why this exact deploy
+> command:**
+>
+> - The dashboard default `npx wrangler deploy` runs from the workspace root, where there
+>   is no local wrangler in `node_modules`. `npx` then pulls the latest wrangler (v4+),
+>   which has a workspace-root guard that refuses to run when it sees `pnpm-workspace.yaml`.
+> - `pnpm -F @fwgin/worker deploy` triggers pnpm's builtin `deploy` command (it copies a
+>   workspace into a target directory) and fails with `ERR_PNPM_INVALID_DEPLOY_TARGET`.
+>   That's why our worker's deploy script is named `release`, not `deploy`.
+>
+> `pnpm -F @fwgin/worker exec wrangler deploy` sidesteps both: `exec` runs the binary
+> directly (no builtin name collision), and the filter changes cwd to `packages/worker/`
+> so the pinned wrangler v3 is used and the worker's `wrangler.toml` is found. The frontend
+> dist produced by the build phase is reused — no duplicate frontend build during deploy.
+> If you'd prefer the script form, `pnpm -F @fwgin/worker release` also works (it just
+> rebuilds the frontend redundantly, since the build phase already produced it).
 
 ## 6. (Optional) Custom domain
 
@@ -159,6 +182,21 @@ services validate this.
 
 ## Troubleshooting
 
+- **Workers Builds fails with `The Wrangler application detection logic has been run in
+  the root of a workspace`** — your CF dashboard's **Deploy command** is still the default
+  `npx wrangler deploy`. Because there's no wrangler in the root `node_modules`, `npx`
+  pulls wrangler v4 from the registry, and v4 explicitly refuses to run from a workspace
+  root (it sees `pnpm-workspace.yaml`). Fix: in **Workers & Pages → fwgin → Settings →
+  Build → Edit configuration**, change the deploy command to
+  `pnpm -F @fwgin/worker exec wrangler deploy` and re-run the build.
+- **Workers Builds fails with `ERR_PNPM_INVALID_DEPLOY_TARGET  This command requires one
+  parameter`** — your CF dashboard's **Deploy command** is `pnpm -F @fwgin/worker deploy`
+  (or any variant of `pnpm ... deploy` without the `exec` keyword). pnpm has a builtin
+  `deploy` command that takes precedence over any script named `deploy` and expects a
+  target directory argument. That's why our worker's deploy script is named `release`,
+  not `deploy`. Fix: change the deploy command to
+  `pnpm -F @fwgin/worker exec wrangler deploy` (or `pnpm -F @fwgin/worker release` if you
+  don't mind the extra frontend rebuild during deploy).
 - **`Error: D1_ERROR: no such table`** — you forgot step 2. Run the migrations.
 - **WebSocket connects but immediately closes** — check browser DevTools; almost always a
   cookie/auth issue. Confirm `__Host-fwgin_session` is being sent.

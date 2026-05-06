@@ -18,7 +18,7 @@
     "lint": "biome check .",
     "format": "biome format --write .",
     "typecheck": "pnpm -r typecheck",
-    "deploy": "pnpm -F @fwgin/worker deploy",
+    "release": "pnpm -F @fwgin/worker release",
     "gen:vapid": "node scripts/gen-vapid.mjs"
   },
   "devDependencies": {

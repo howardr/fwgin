@@ -79,9 +79,18 @@ asdf exec pnpm -F @fwgin/frontend build     # produces packages/frontend/dist
 # Worker bundle (dry-run)
 cd packages/worker && asdf exec pnpm exec wrangler deploy --dry-run --outdir /tmp/x
 
-# Deploy (do not use `pnpm deploy` — it collides with pnpm's builtin)
+# Deploy. Two equivalent options:
+#   1. From the worker package directly (skips frontend rebuild if already built):
 cd packages/worker && asdf exec pnpm exec wrangler deploy
+#   2. From the repo root via the `release` script (rebuilds frontend then deploys):
+asdf exec pnpm -F @fwgin/worker release
 ```
+
+Note: the worker's deploy script is named `release`, not `deploy`. `pnpm deploy` is a
+builtin pnpm command (it copies a workspace into a target directory), so naming our
+script `deploy` would shadow the builtin and break `pnpm -F @fwgin/worker deploy`.
+`release` sidesteps the collision; both `pnpm -F @fwgin/worker release` and
+`pnpm -F @fwgin/worker run release` invoke the script.
 
 ## Critical invariants the engine maintains
 
@@ -174,8 +183,10 @@ Secrets currently set on the production worker:
 - `wrangler d1 list` shows a stale `num_tables` count. Use
   `wrangler d1 execute fwgin --remote --command "SELECT name FROM sqlite_master WHERE type='table'"`
   to check the actual schema.
-- `pnpm deploy` is a pnpm builtin and conflicts with our worker `deploy` script.
-  Always use `pnpm exec wrangler deploy` instead.
+- The worker's deploy script is named `release`, not `deploy`, because `pnpm deploy`
+  is a builtin command (copies a workspace into a target dir) and shadows any script
+  named `deploy`. Use `pnpm -F @fwgin/worker release` from the repo root, or
+  `pnpm exec wrangler deploy` from inside `packages/worker/`.
 
 ## Code style conventions
 
