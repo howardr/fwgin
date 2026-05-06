@@ -29,6 +29,7 @@ import {
   type ServerMsg,
 } from '@fwgin/shared';
 import type { Env } from '../env.js';
+import { notifyPlayerTurn } from '../push/notify.js';
 
 interface PersistedShape {
   state: GameState;
@@ -107,13 +108,12 @@ export class GameDO extends DurableObject<Env> {
 
   private async handleStart(): Promise<Response> {
     if (!this.game) return new Response('Not initialized', { status: 400 });
+    const before = this.snapshotTurn();
     const result = apply(this.game, { type: 'START_GAME', at: Date.now() });
     if (!result.result.ok) {
       return new Response(result.result.message, { status: 400 });
     }
-    await this.scheduleAlarm();
-    await this.persist();
-    this.broadcast();
+    await this.afterAction(before);
     return new Response('OK', { status: 200 });
   }
 
@@ -219,6 +219,7 @@ export class GameDO extends DurableObject<Env> {
       return;
     }
 
+    const before = this.snapshotTurn();
     const outcome = apply(this.game, action);
     if (!outcome.result.ok) {
       this.sendTo(ws, {
@@ -228,10 +229,7 @@ export class GameDO extends DurableObject<Env> {
       });
       return;
     }
-
-    await this.scheduleAlarm();
-    await this.persist();
-    this.broadcast();
+    await this.afterAction(before);
   }
 
   override async webSocketClose(
@@ -266,10 +264,9 @@ export class GameDO extends DurableObject<Env> {
       await this.scheduleAlarm();
       return;
     }
+    const before = this.snapshotTurn();
     apply(this.game, { type: 'AUTO_PLAY', at: now });
-    await this.scheduleAlarm();
-    await this.persist();
-    this.broadcast();
+    await this.afterAction(before);
   }
 
   // -----------------------------------------------------------------------------------
@@ -288,6 +285,44 @@ export class GameDO extends DurableObject<Env> {
   private async persist(): Promise<void> {
     if (!this.game) return;
     await this.ctx.storage.put<PersistedShape>(STORAGE_KEY, { state: this.game });
+  }
+
+  /** Snapshot of turn-relevant state taken BEFORE applying an action. */
+  private snapshotTurn(): { phase: string; seat: number; round: number } {
+    if (!this.game) return { phase: 'lobby', seat: -1, round: 0 };
+    return {
+      phase: this.game.phase,
+      seat: this.game.turnSeat,
+      round: this.game.round,
+    };
+  }
+
+  /**
+   * Common post-action work: persist, schedule alarm, broadcast, and (if the active
+   * player changed) fire a Web Push to the new player.
+   */
+  private async afterAction(before: { phase: string; seat: number; round: number }): Promise<void> {
+    if (!this.game) return;
+    await this.scheduleAlarm();
+    await this.persist();
+    this.broadcast();
+
+    const after = this.snapshotTurn();
+    const turnChanged =
+      after.seat !== before.seat || after.round !== before.round || after.phase !== before.phase;
+    if (turnChanged && (this.game.phase === 'in_round' || this.game.phase === 'awaiting_upcard')) {
+      const player = this.game.players.find((p) => p.seat === this.game!.turnSeat);
+      if (player) {
+        // Fire-and-forget; don't block the action on push delivery.
+        this.ctx.waitUntil(
+          notifyPlayerTurn(this.env, player.id, {
+            gameId: this.game.id,
+            round: this.game.round,
+            wildRank: String(this.game.wildRank ?? ''),
+          }),
+        );
+      }
+    }
   }
 
   private metaFor(ws: WebSocket): SessionMeta | null {

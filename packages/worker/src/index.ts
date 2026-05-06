@@ -16,7 +16,7 @@ import {
   handleListMyGames,
   handleStartGame,
 } from './routes/games.js';
-import { handleMeGet, handleMePost } from './routes/me.js';
+import { handleConfigGet, handleMeGet, handleMePost } from './routes/me.js';
 import { handlePushSubscribe, handlePushUnsubscribe } from './routes/push.js';
 
 export { GameDO } from './do/GameDO.js';
@@ -41,6 +41,9 @@ export default {
       }
       if (path === '/api/me' && request.method === 'POST') {
         return handleMePost(request, env, auth);
+      }
+      if (path === '/api/config' && request.method === 'GET') {
+        return handleConfigGet(request, env, auth);
       }
 
       // /api/games

@@ -51,6 +51,7 @@ async function http<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
+  config: () => http<{ vapidPublicKey: string }>('/api/config'),
   me: () => http<Me>('/api/me'),
   setName: (displayName: string) =>
     http<Me>('/api/me', {

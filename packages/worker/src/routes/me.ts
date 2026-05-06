@@ -1,5 +1,6 @@
 /**
  * /api/me — read or update the current user's profile.
+ * /api/config — public configuration (e.g. VAPID public key).
  */
 
 import { type AuthContext, updateDisplayName } from '../auth.js';
@@ -21,4 +22,14 @@ export async function handleMePost(req: Request, env: Env, ctx: AuthContext): Pr
     {},
     ctx.setCookie,
   );
+}
+
+export async function handleConfigGet(
+  _req: Request,
+  env: Env,
+  _ctx: AuthContext,
+): Promise<Response> {
+  return jsonResponse({
+    vapidPublicKey: env.VAPID_PUBLIC_KEY ?? '',
+  });
 }

@@ -4,6 +4,12 @@
 
 import { useEffect, useState } from 'react';
 import { type GameSummary, type Me, api } from '../lib/api.js';
+import {
+  getPushStatus,
+  registerServiceWorker,
+  subscribeToPush,
+  unsubscribeFromPush,
+} from '../lib/push.js';
 
 export function Landing({ onNavigate }: { onNavigate(hash: string): void }) {
   const [me, setMe] = useState<Me | null>(null);
@@ -19,6 +25,9 @@ export function Landing({ onNavigate }: { onNavigate(hash: string): void }) {
     discardVisibility: 1,
     acesMode: 'high' as 'low' | 'high' | 'either',
   });
+  const [vapidKey, setVapidKey] = useState('');
+  const [pushSubscribed, setPushSubscribed] = useState(false);
+  const [pushSupported, setPushSupported] = useState(false);
 
   useEffect(() => {
     api
@@ -29,7 +38,28 @@ export function Landing({ onNavigate }: { onNavigate(hash: string): void }) {
       .myGames()
       .then((r) => setMy(r.games))
       .catch(() => undefined);
+    api
+      .config()
+      .then((c) => setVapidKey(c.vapidPublicKey))
+      .catch(() => undefined);
+    registerServiceWorker().then(() => {
+      getPushStatus().then((s) => {
+        setPushSupported(s.supported);
+        setPushSubscribed(s.subscribed && s.permission === 'granted');
+      });
+    });
   }, []);
+
+  async function togglePush() {
+    if (!vapidKey) return;
+    if (pushSubscribed) {
+      await unsubscribeFromPush();
+      setPushSubscribed(false);
+    } else {
+      const ok = await subscribeToPush(vapidKey);
+      setPushSubscribed(ok);
+    }
+  }
 
   async function saveName() {
     setBusy(true);
@@ -122,6 +152,18 @@ export function Landing({ onNavigate }: { onNavigate(hash: string): void }) {
           )
         ) : (
           <p>Loading…</p>
+        )}
+        {pushSupported && vapidKey && (
+          <div className="row" style={{ marginTop: '0.75rem' }}>
+            <button type="button" onClick={togglePush} className={pushSubscribed ? '' : 'primary'}>
+              {pushSubscribed ? 'Disable turn notifications' : 'Enable turn notifications'}
+            </button>
+            <span className="muted">
+              {pushSubscribed
+                ? "We'll notify you in this browser when it's your turn."
+                : 'Get a push notification on your device when a game wants you.'}
+            </span>
+          </div>
         )}
       </section>
 
