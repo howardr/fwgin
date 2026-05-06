@@ -55,7 +55,8 @@ commands with `asdf exec`**:
 Direct `pnpm` may resolve to a different shim. Check `asdf current` if anything
 looks confused.
 
-Runtimes pinned in `.tool-versions`: Node 22.21.0. Package manager pinned in
+Runtimes pinned in `.tool-versions`: Node 22.16.0 (matches the version
+pre-installed in Cloudflare Workers Builds). Package manager pinned in
 `package.json` `packageManager` field: pnpm 10.3.0.
 
 ### Common commands
