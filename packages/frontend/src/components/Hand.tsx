@@ -92,11 +92,15 @@ export function Hand({ hand, selected, wildRank, customOrder, onToggle, onReorde
     const crossed =
       dragState.isDragging || dx * dx + dy * dy >= DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX;
     if (!crossed) return;
+    // Exclude the dragged card from the search — its bounding rect tracks the pointer
+    // (because of the translate transform) so it would always win the closest-card
+    // contest, leading to no-op drops. We want the closest *non-dragged* neighbor.
     const dropTargetGap = computeDropTargetGap(
       ev.clientX,
       ev.clientY,
       cardRefs.current,
       displayHand.length,
+      dragState.cardIndex,
     );
     setDragState({
       ...dragState,
@@ -138,14 +142,18 @@ export function Hand({ hand, selected, wildRank, customOrder, onToggle, onReorde
       {displayHand.map((card, i) => {
         const isThisDragging = dragState?.cardIndex === i && dragState.isDragging;
         const showLeftIndicator = shouldShowIndicator(dragState, i);
+        // Lifted look while dragging: translate + slight scale and tilt + heavier
+        // shadow make the dragged card visually "above" the others, and reinforce that
+        // the card under the pointer is the one being moved.
         const wrapperStyle = isThisDragging
           ? ({
               transform: `translate(${dragState.currentX - dragState.startX}px, ${
                 dragState.currentY - dragState.startY
-              }px)`,
+              }px) rotate(-3deg) scale(1.06)`,
               zIndex: 10,
-              opacity: 0.85,
+              opacity: 0.95,
               touchAction: 'none',
+              filter: 'drop-shadow(0 6px 10px rgba(0, 0, 0, 0.55))',
             } as const)
           : ({ touchAction: 'none' } as const);
         return (
@@ -198,20 +206,25 @@ export function computeDisplayHand(hand: CardId[], customOrder: CardId[]): CardI
 
 /**
  * Find the closest gap (in [0, totalCards]) to the pointer's current position.
- * Iterates over rendered card rects, picks the one whose center is closest in 2D, then
- * decides left or right gap based on which side of the card center the pointer is on.
- * Wrap-friendly: the closest-by-2D-distance approach handles multi-row hands well.
+ * Iterates over rendered card rects (skipping `skipIdx` if provided — typically the
+ * dragged card, whose rect tracks the pointer and would always win), picks the card
+ * whose center is closest in 2D, then decides left or right gap based on which side
+ * of that card's center the pointer is on. Wrap-friendly: the 2D-distance approach
+ * naturally handles multi-row hands (the closest card is in the row nearest the
+ * pointer's Y, and the X side-check picks the gap on that row).
  */
 function computeDropTargetGap(
   pointerX: number,
   pointerY: number,
   cardRefs: Map<number, HTMLElement>,
   totalCards: number,
+  skipIdx?: number,
 ): number {
   if (totalCards === 0) return 0;
-  let bestIdx = 0;
+  let bestIdx = -1;
   let bestDist = Number.POSITIVE_INFINITY;
   for (const [idx, el] of cardRefs) {
+    if (idx === skipIdx) continue;
     const rect = el.getBoundingClientRect();
     const cx = rect.left + rect.width / 2;
     const cy = rect.top + rect.height / 2;
@@ -223,6 +236,8 @@ function computeDropTargetGap(
       bestIdx = idx;
     }
   }
+  // Hand has only the dragged card (or refs are missing): no meaningful target.
+  if (bestIdx === -1) return skipIdx ?? 0;
   const closest = cardRefs.get(bestIdx);
   if (!closest) return bestIdx;
   const rect = closest.getBoundingClientRect();
