@@ -328,13 +328,15 @@ export class GameDO extends DurableObject<Env> {
   private metaFor(ws: WebSocket): SessionMeta | null {
     const tags = this.ctx.getTags(ws);
     let userId: string | null = null;
-    let spectator = false;
     for (const t of tags) {
       if (t.startsWith('user:')) userId = t.slice(5);
-      if (t === 'spectator') spectator = true;
     }
     if (!userId) return null;
-    return { userId, spectator };
+    // Determine spectator status from the *current* game state — a user who
+    // connected as a spectator before joining the lobby gets promoted to a player
+    // on their next broadcast without needing to reconnect.
+    const isPlayer = this.game?.players.some((p) => p.id === userId) ?? false;
+    return { userId, spectator: !isPlayer };
   }
 
   private sendTo(ws: WebSocket, msg: ServerMsg): void {

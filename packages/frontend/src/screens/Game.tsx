@@ -16,15 +16,68 @@ import { type GameLobby, api } from '../lib/api.js';
 export function Game({ gameId, onNavigate }: { gameId: string; onNavigate(hash: string): void }) {
   const [lobby, setLobby] = useState<GameLobby | null>(null);
   const [lobbyError, setLobbyError] = useState<string | null>(null);
+  const [joining, setJoining] = useState(false);
   const { view, connected, error, send, chat } = useGameSocket(gameId);
   const [selected, setSelected] = useState<CardId[]>([]);
 
+  // Initial fetch of the lobby record.
   useEffect(() => {
     api
       .getGame(gameId)
       .then(setLobby)
       .catch((e) => setLobbyError(String(e.message)));
   }, [gameId]);
+
+  // Auto-join: if a visitor lands on an invite link and isn't yet a player and the
+  // game is still in lobby, join them automatically. After a successful join the WS
+  // will broadcast the updated state; we also refetch the lobby record to pick up
+  // status flips like youAre.
+  useEffect(() => {
+    if (!lobby) return;
+    if (joining) return;
+    if (lobby.status !== 'lobby') return;
+    if (lobby.youAre.kind === 'player') return;
+    if (lobby.players.length >= lobby.config.maxPlayers) return; // can't join, fall through to spectator
+    let cancelled = false;
+    setJoining(true);
+    api
+      .joinGame(gameId)
+      .then(() => api.getGame(gameId))
+      .then((next) => {
+        if (!cancelled) setLobby(next);
+      })
+      .catch((e) => {
+        if (!cancelled) setLobbyError(String((e as Error).message));
+      })
+      .finally(() => {
+        if (!cancelled) setJoining(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [gameId, lobby, joining]);
+
+  // Live-merge: whenever the WS pushes a fresh view, the players array is the
+  // authoritative live one. We splice it back into our `lobby` state so the Lobby
+  // component sees new joiners without any extra REST calls.
+  useEffect(() => {
+    if (!view) return;
+    setLobby((prev) => {
+      if (!prev) return prev;
+      // Build a new players array from the WS view, preserving joined_at ordering
+      // when we already know it; default to seat ordering otherwise.
+      const known = new Map(prev.players.map((p) => [p.id, p]));
+      const merged = [...view.players]
+        .sort((a, b) => a.seat - b.seat)
+        .map((p) => ({
+          id: p.id,
+          seat: p.seat,
+          displayName: p.displayName,
+          joinedAt: known.get(p.id)?.joinedAt ?? Date.now(),
+        }));
+      return { ...prev, players: merged };
+    });
+  }, [view]);
 
   // When the round changes (or a new game starts), clear the selection.
   // biome-ignore lint/correctness/useExhaustiveDependencies: setSelected is stable
@@ -56,6 +109,8 @@ export function Game({ gameId, onNavigate }: { gameId: string; onNavigate(hash: 
       <Lobby
         gameId={gameId}
         lobby={lobby}
+        joining={joining}
+        connected={connected}
         onStart={async () => {
           try {
             await api.startGame(gameId);
@@ -87,11 +142,15 @@ export function Game({ gameId, onNavigate }: { gameId: string; onNavigate(hash: 
 function Lobby({
   gameId,
   lobby,
+  joining,
+  connected,
   onStart,
   onBack,
 }: {
   gameId: string;
   lobby: GameLobby;
+  joining: boolean;
+  connected: boolean;
   onStart(): void;
   onBack(): void;
 }) {
@@ -106,7 +165,13 @@ function Lobby({
           ← Home
         </button>
         <h1>Lobby</h1>
+        <span
+          className={`status-dot ${connected ? 'on' : 'off'}`}
+          title={connected ? 'live' : 'reconnecting…'}
+          style={{ marginLeft: 'auto' }}
+        />
       </header>
+      {joining && <p className="muted">Joining…</p>}
       <section className="card-section">
         <h2>Invite</h2>
         <p className="muted">Share this link to invite players or spectators:</p>
@@ -133,9 +198,21 @@ function Lobby({
             <li key={p.id}>
               {p.displayName}
               {p.id === lobby.hostId && <span className="badge">host</span>}
+              {lobby.youAre.kind === 'player' && p.id === lobby.youAre.id && (
+                <span className="badge muted">you</span>
+              )}
             </li>
           ))}
         </ul>
+        {!isHost && lobby.youAre.kind === 'player' && (
+          <p className="muted">Waiting for the host to start the game…</p>
+        )}
+        {lobby.youAre.kind === 'spectator' && (
+          <p className="muted">
+            You're watching this lobby as a spectator
+            {lobby.players.length >= lobby.config.maxPlayers ? ' (the lobby is full)' : ''}.
+          </p>
+        )}
       </section>
       <section className="card-section">
         <h2>Settings</h2>
@@ -151,7 +228,7 @@ function Lobby({
           <li>Spectators: {lobby.config.spectatorsAllowed ? 'allowed' : 'disabled'}</li>
         </ul>
       </section>
-      {isHost ? (
+      {isHost && (
         <button
           type="button"
           className="primary"
@@ -160,8 +237,6 @@ function Lobby({
         >
           Start game
         </button>
-      ) : (
-        <p className="muted">Waiting for the host to start the game…</p>
       )}
     </main>
   );
