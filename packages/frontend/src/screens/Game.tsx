@@ -93,8 +93,7 @@ export function Game({ gameId, onNavigate }: { gameId: string; onNavigate(hash: 
   }, [view?.round, view?.phase]);
 
   // When a new round starts the deck is reshuffled and the player gets a fresh hand,
-  // so any previous custom ordering no longer applies. Phase changes within a round
-  // (in_round <-> awaiting_upcard) preserve the order.
+  // so any previous custom ordering no longer applies.
   // biome-ignore lint/correctness/useExhaustiveDependencies: setCustomOrder is stable
   useEffect(() => {
     setCustomOrder([]);
@@ -376,11 +375,6 @@ function Table({
           <span className="sep">•</span>
           {view.phase === 'game_over' ? (
             <span>Game over</span>
-          ) : view.phase === 'awaiting_upcard' ? (
-            <span>
-              {currentPlayer?.displayName} considering upcard…{' '}
-              <TurnTimer deadline={view.turnDeadline} />
-            </span>
           ) : (
             <span>
               {currentPlayer?.displayName}'s turn — <TurnTimer deadline={view.turnDeadline} />
@@ -476,16 +470,6 @@ function Table({
             onReorder={setCustomOrder}
           />
           <div className="actions">
-            {view.phase === 'awaiting_upcard' && isYourTurn && (
-              <>
-                <button type="button" className="primary" onClick={() => send_('accept_upcard')}>
-                  Take upcard
-                </button>
-                <button type="button" onClick={() => send_('decline_upcard')}>
-                  Pass
-                </button>
-              </>
-            )}
             {view.phase === 'in_round' && isYourTurn && (
               <>
                 <button
@@ -592,12 +576,6 @@ function describeEvent(
       return 'Game started.';
     case 'round_started':
       return `Round ${e.round} started — wild is ${e.wildRank}, dealer is ${name(e.dealerId)}.`;
-    case 'upcard_offered':
-      return `${name(e.toPlayerId)} was offered the upcard ${e.card}.`;
-    case 'upcard_accepted':
-      return `${name(e.byPlayerId)} took the upcard ${e.card}.`;
-    case 'upcard_declined':
-      return `${name(e.byPlayerId)} passed on the upcard.`;
     case 'wild_stolen':
       return `${name(e.byPlayerId)} stole a wild and surrendered ${e.surrendered}.`;
     case 'drew_stock':

@@ -13,13 +13,7 @@ export type MeldId = string;
 
 export type AcesMode = 'low' | 'high' | 'either';
 
-export type GamePhase =
-  | 'lobby'
-  | 'awaiting_upcard'
-  | 'in_round'
-  | 'round_over'
-  | 'game_over'
-  | 'abandoned';
+export type GamePhase = 'lobby' | 'in_round' | 'round_over' | 'game_over' | 'abandoned';
 
 export interface GameConfig {
   /** Maximum players this game can hold (2-6). */
@@ -67,9 +61,6 @@ export interface Meld {
 export type GameEvent =
   | { type: 'game_started'; at: number }
   | { type: 'round_started'; round: number; wildRank: Rank; dealerId: PlayerId; at: number }
-  | { type: 'upcard_offered'; toPlayerId: PlayerId; card: Card; at: number }
-  | { type: 'upcard_accepted'; byPlayerId: PlayerId; card: Card; at: number }
-  | { type: 'upcard_declined'; byPlayerId: PlayerId; at: number }
   | {
       type: 'wild_stolen';
       byPlayerId: PlayerId;

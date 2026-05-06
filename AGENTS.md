@@ -142,7 +142,7 @@ These are checked in tests; do not break them:
    socket. State is unchanged.
 4. If accepted, DO calls `afterAction(before)`:
    - `scheduleAlarm()` — sets `state.storage.setAlarm(turnDeadline)` while phase
-     is `in_round` or `awaiting_upcard`; otherwise deletes the alarm.
+     is `in_round`; otherwise deletes the alarm.
    - `persist()` — writes the full `GameState` to DO storage under key `state`.
    - `broadcast()` — sends a redacted view to every connected WebSocket. Role
      (player/spectator) is recomputed from the *current* `game.players` so a

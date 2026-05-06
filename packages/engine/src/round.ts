@@ -19,9 +19,13 @@ const HAND_SIZE = 7;
 /**
  * Deal a fresh round into the supplied state mutably. Resets per-round fields:
  *   - hands, stock, discard, meldsOnTable, wildRank
- *   - phase becomes 'awaiting_upcard'
+ *   - phase becomes 'in_round'
  *   - dealerSeat advances (caller passes the new dealerSeat for round 1)
- *   - turnSeat is set to the player after the dealer (offered the upcard first)
+ *   - turnSeat is set to the player after the dealer (the first to play)
+ *
+ * The first player receives one extra card (8 instead of 7) which counts as their
+ * opening draw; the discard pile starts empty. `_turnState` is initialised so the
+ * first action that requires a draw (lay/discard/auto-play) sees `drewThisTurn=true`.
  *
  * Generates a fresh seed for the round and stores it on `state.rngSeed`.
  */
@@ -41,9 +45,9 @@ export function dealRound(state: GameState, round: number, now: number): void {
   state.hands = {};
   state.stock = [];
   state.discard = [];
-  state.phase = 'awaiting_upcard';
+  state.phase = 'in_round';
 
-  // Deal HAND_SIZE cards per player around the table.
+  // Deal HAND_SIZE cards per player, starting with the player after the dealer.
   const order = playerSeatOrder(state, state.dealerSeat);
   for (const p of order) state.hands[p.id] = [];
   for (let i = 0; i < HAND_SIZE; i++) {
@@ -52,14 +56,26 @@ export function dealRound(state: GameState, round: number, now: number): void {
     }
   }
 
-  // Top of stock -> upcard onto discard.
-  state.discard.push(deck.pop()!);
+  // The first player to act (the non-dealer) receives one extra card. This stands
+  // in for their opening draw, so they begin the round with `drewThisTurn = true`.
+  const firstPlayer = order[0]!;
+  const bonusCard = deck.pop()!;
+  state.hands[firstPlayer.id]!.push(bonusCard);
   state.stock = deck;
 
-  // First chance at the upcard goes to the player after the dealer.
-  state.turnSeat = nextSeat(state, state.dealerSeat);
+  // First player to act is the one after the dealer.
+  state.turnSeat = firstPlayer.seat;
   state.turnDeadline = now + state.config.turnTimerMs;
   state.updatedAt = now;
+
+  // Mark the deal-bonus as the first player's "draw this turn" so the engine
+  // (a) blocks a redundant draw, (b) blocks STEAL_WILD on the opening turn, and
+  // (c) lets auto-play know which card to discard if the timer expires immediately.
+  state._turnState = {
+    drewThisTurn: true,
+    drewSource: 'deal',
+    drewCard: bonusCard,
+  };
 
   state.log.push({
     type: 'round_started',

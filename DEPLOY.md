@@ -205,4 +205,4 @@ services validate this.
   `pnpm gen:vapid` and update both `[vars]` and the secret.
 - **Auto-play not firing on timer expiry** — check the DO has its alarm scheduled by
   inspecting `wrangler tail` while the timer counts down. The alarm is set whenever the
-  phase is `in_round` or `awaiting_upcard`.
+  phase is `in_round`.

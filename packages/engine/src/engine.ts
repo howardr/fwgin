@@ -116,10 +116,6 @@ function dispatch(state: GameState, action: Action): ActionResult {
   switch (action.type) {
     case 'START_GAME':
       return startGame(state, action.at);
-    case 'ACCEPT_UPCARD':
-      return acceptUpcard(state, action.playerId, action.at);
-    case 'DECLINE_UPCARD':
-      return declineUpcard(state, action.playerId, action.at);
     case 'STEAL_WILD':
       return stealWild(state, action.playerId, action.meldId, action.surrender, action.at);
     case 'DRAW_STOCK':
@@ -175,54 +171,6 @@ function startGame(state: GameState, at: number): ActionResult {
 }
 
 // =========================================================================================
-// Upcard offer — round opener.
-// =========================================================================================
-
-function acceptUpcard(state: GameState, playerId: PlayerId, at: number): ActionResult {
-  if (state.phase !== 'awaiting_upcard') return err('bad_phase', 'Not in upcard phase');
-  if (!isCurrentPlayer(state, playerId)) return err('not_your_turn', 'It is not your turn');
-  const card = topDiscard(state);
-  if (!card) return err('empty_discard', 'No upcard available');
-  state.discard.pop();
-  putInHand(state, playerId, card);
-  logEvent(state, { type: 'upcard_accepted', byPlayerId: playerId, card, at });
-  // Player must now discard to complete the upcard turn. The accept counts as their
-  // draw for this turn so meld/discard are now legal.
-  state.phase = 'in_round';
-  ensureTurnState(state).drewThisTurn = true;
-  ensureTurnState(state).drewSource = 'discard';
-  ensureTurnState(state).drewCard = card;
-  state.updatedAt = at;
-  return ok();
-}
-
-function declineUpcard(state: GameState, playerId: PlayerId, at: number): ActionResult {
-  if (state.phase !== 'awaiting_upcard') return err('bad_phase', 'Not in upcard phase');
-  if (!isCurrentPlayer(state, playerId)) return err('not_your_turn', 'It is not your turn');
-  logEvent(state, { type: 'upcard_declined', byPlayerId: playerId, at });
-
-  // Count declines in the current round only (since the most recent round_started event).
-  let declinesThisRound = 0;
-  for (let i = state.log.length - 1; i >= 0; i--) {
-    const ev = state.log[i]!;
-    if (ev.type === 'round_started') break;
-    if (ev.type === 'upcard_declined') declinesThisRound++;
-  }
-  // Offer goes only to non-dealer first, then dealer. After 2 declines, non-dealer
-  // draws from stock to begin play.
-  if (declinesThisRound >= 2) {
-    state.turnSeat = nextSeat(state, state.dealerSeat);
-    state.phase = 'in_round';
-    state.updatedAt = at;
-    return ok();
-  }
-  // Pass the offer to the dealer (turnSeat was at non-dealer when the round opened).
-  state.turnSeat = state.dealerSeat;
-  state.updatedAt = at;
-  return ok();
-}
-
-// =========================================================================================
 // STEAL_WILD — before the draw step on your turn.
 // =========================================================================================
 
@@ -235,12 +183,10 @@ function stealWild(
 ): ActionResult {
   if (state.phase !== 'in_round') return err('bad_phase', 'Not in active play');
   if (!isCurrentPlayer(state, playerId)) return err('not_your_turn', 'It is not your turn');
-  // A steal must happen before draw, i.e. the player has not yet drawn this turn. We use
-  // the convention: hand size for current player == HAND_SIZE_AT_START_OF_TURN. We track
-  // implicitly by saying: steal is legal as long as the player hasn't taken the draw step,
-  // which we identify by whether the *previous* event for this player this turn was an
-  // ACCEPT_UPCARD/DRAW_*. In practice, the safest enforceable rule: steal is illegal once
-  // a draw event has been logged this turn (we check via a turn-scope event scan).
+  // A steal must happen before draw, i.e. the player has not yet drawn this turn.
+  // We track this with `_turnState.drewThisTurn`, which is set by DRAW_STOCK,
+  // DRAW_DISCARD, and the deal itself for the first player of each round (whose
+  // bonus 8th card stands in for their opening draw).
   if (drawHappenedThisTurn(state, playerId)) {
     return err('after_draw', 'Steal must occur before drawing');
   }
@@ -533,18 +479,35 @@ function discard(state: GameState, playerId: PlayerId, card: Card, at: number): 
 // =========================================================================================
 
 function autoPlay(state: GameState, at: number): ActionResult {
-  if (state.phase !== 'in_round' && state.phase !== 'awaiting_upcard') {
-    return err('bad_phase', 'Not in a play phase');
-  }
+  if (state.phase !== 'in_round') return err('bad_phase', 'Not in a play phase');
   const player = currentPlayer(state);
   if (!player) return err('no_player', 'No current player');
 
-  if (state.phase === 'awaiting_upcard') {
-    // Default: decline.
-    return declineUpcard(state, player.id, at);
+  // First-turn case: the player has already "drawn" via the deal. Discard the bonus
+  // card from their hand instead of pulling another card from the stock. If the bonus
+  // card is no longer in hand (e.g. they melded it before idling out), fall through
+  // to a normal stock-draw auto-play to keep the round moving.
+  const ts = state._turnState;
+  if (ts?.drewSource === 'deal' && ts.drewCard) {
+    const hand = state.hands[player.id] ?? [];
+    if (hand.includes(ts.drewCard)) {
+      const card = ts.drewCard;
+      takeFromHand(state, player.id, card);
+      state.discard.push(card);
+      logEvent(state, {
+        type: 'auto_played',
+        playerId: player.id,
+        drewFromStock: card,
+        discarded: card,
+        at,
+      });
+      clearTurnState(state);
+      advanceTurn(state, at);
+      return ok();
+    }
   }
 
-  // Active play: draw stock, then discard the same card.
+  // Normal turn: draw from stock and immediately discard that card.
   if (state.stock.length === 0) reshuffleDiscardIntoStock(state, at);
   if (state.stock.length === 0) {
     // Truly empty — end round as a draw.
@@ -651,7 +614,7 @@ declare module '@fwgin/shared' {
 
 interface TurnState {
   drewThisTurn: boolean;
-  drewSource?: 'stock' | 'discard';
+  drewSource?: 'stock' | 'discard' | 'deal';
   drewCard?: Card;
 }
 

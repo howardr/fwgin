@@ -262,7 +262,7 @@ export class GameDO extends DurableObject<Env> {
 
   private async handleAlarm() {
     if (!this.game) return;
-    if (this.game.phase !== 'in_round' && this.game.phase !== 'awaiting_upcard') {
+    if (this.game.phase !== 'in_round') {
       return;
     }
     const now = Date.now();
@@ -282,7 +282,7 @@ export class GameDO extends DurableObject<Env> {
 
   private async scheduleAlarm(): Promise<void> {
     if (!this.game) return;
-    if (this.game.phase === 'in_round' || this.game.phase === 'awaiting_upcard') {
+    if (this.game.phase === 'in_round') {
       await this.ctx.storage.setAlarm(this.game.turnDeadline);
     } else {
       await this.ctx.storage.deleteAlarm();
@@ -317,7 +317,7 @@ export class GameDO extends DurableObject<Env> {
     const after = this.snapshotTurn();
     const turnChanged =
       after.seat !== before.seat || after.round !== before.round || after.phase !== before.phase;
-    if (turnChanged && (this.game.phase === 'in_round' || this.game.phase === 'awaiting_upcard')) {
+    if (turnChanged && this.game.phase === 'in_round') {
       const player = this.game.players.find((p) => p.seat === this.game!.turnSeat);
       if (player) {
         // Fire-and-forget; don't block the action on push delivery.
@@ -440,10 +440,6 @@ function toAction(
   const asCard = (s: string) => s as Card;
   const asCards = (arr: string[]) => arr.map(asCard);
   switch (msg.type) {
-    case 'accept_upcard':
-      return { type: 'ACCEPT_UPCARD', playerId: userId, at };
-    case 'decline_upcard':
-      return { type: 'DECLINE_UPCARD', playerId: userId, at };
     case 'steal_wild':
       return {
         type: 'STEAL_WILD',

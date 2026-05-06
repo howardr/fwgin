@@ -11,8 +11,6 @@ const cardSchema = z.string().regex(/^[A23456789TJQKA][SHDC]$/, 'Invalid card fo
 
 export const ClientMsg = z.discriminatedUnion('type', [
   z.object({ type: z.literal('hello'), token: z.string().optional() }),
-  z.object({ type: z.literal('accept_upcard') }),
-  z.object({ type: z.literal('decline_upcard') }),
   z.object({
     type: z.literal('steal_wild'),
     meldId: z.string(),

@@ -3,100 +3,101 @@ import { describe, expect, it } from 'vitest';
 import { apply } from '../src/engine.js';
 import { lobby2, rigState } from './helpers.js';
 
-// A test that bypasses the upcard offer phase by having both players decline.
-function startAndDeclineUpcards(s: GameState, now: number) {
+/**
+ * Start a game and run the first player's opening turn (which has no draw step) to
+ * completion. After this returns, it is the dealer's normal turn — they must draw
+ * before they can lay melds or discard. Useful for tests that exercise post-opening
+ * mechanics.
+ */
+function startAndCompleteOpeningTurn(s: GameState, now: number) {
   apply(s, { type: 'START_GAME', at: now });
-  // turnSeat is now non-dealer (seat 1, p2).
-  apply(s, { type: 'DECLINE_UPCARD', playerId: 'p2', at: now + 1 });
-  // turnSeat moves to dealer (seat 0, p1).
-  apply(s, { type: 'DECLINE_UPCARD', playerId: 'p1', at: now + 2 });
-  // Both declined: turnSeat returns to non-dealer (seat 1, p2), phase is in_round.
+  // p2 is the first to play and was dealt 8 cards. Discard one to end their turn.
+  const dump = s.hands.p2![s.hands.p2!.length - 1]!;
+  apply(s, { type: 'DISCARD', playerId: 'p2', card: dump, at: now + 1 });
+  // turnSeat is now p1, _turnState is cleared, discard pile has 1 card.
 }
 
-describe('Upcard offer flow', () => {
-  it('non-dealer is offered first, dealer second', () => {
+describe('Opening turn (first player has 8 cards, no draw step)', () => {
+  it('first player begins the round already drawn', () => {
     const s = lobby2();
     apply(s, { type: 'START_GAME', at: 1 });
-    expect(s.turnSeat).toBe(1); // p2 is the non-dealer
-    apply(s, { type: 'DECLINE_UPCARD', playerId: 'p2', at: 2 });
-    expect(s.turnSeat).toBe(0); // dealer
-    apply(s, { type: 'DECLINE_UPCARD', playerId: 'p1', at: 3 });
-    // Both declined: non-dealer must draw from stock.
-    expect(s.turnSeat).toBe(1);
     expect(s.phase).toBe('in_round');
-  });
-
-  it('accepting the upcard requires a discard before turn ends', () => {
-    const s = lobby2();
-    apply(s, { type: 'START_GAME', at: 1 });
-    const upcard = s.discard[s.discard.length - 1]!;
-    apply(s, { type: 'ACCEPT_UPCARD', playerId: 'p2', at: 2 });
-    expect(s.hands.p2).toContain(upcard);
+    expect(s.turnSeat).toBe(1); // p2 (non-dealer) plays first
     expect(s.hands.p2).toHaveLength(8);
-    // Cannot draw again — must discard.
-    const r = apply(s, { type: 'DRAW_STOCK', playerId: 'p2', at: 3 });
-    expect(r.result.ok).toBe(false);
+    expect(s.discard).toHaveLength(0);
+    // Drawing is rejected: deal already counted as the draw.
+    const r1 = apply(s, { type: 'DRAW_STOCK', playerId: 'p2', at: 2 });
+    expect(r1.result.ok).toBe(false);
+    const r2 = apply(s, { type: 'DRAW_DISCARD', playerId: 'p2', at: 2 });
+    expect(r2.result.ok).toBe(false);
   });
 
-  it('accepting an upcard then discarding ends the turn', () => {
+  it('first player can immediately discard to end their turn', () => {
     const s = lobby2();
     apply(s, { type: 'START_GAME', at: 1 });
-    apply(s, { type: 'ACCEPT_UPCARD', playerId: 'p2', at: 2 });
-    const handP2 = [...s.hands.p2!];
-    const dump = handP2[0]!;
-    const r = apply(s, { type: 'DISCARD', playerId: 'p2', card: dump, at: 3 });
+    const dump = s.hands.p2![0]!;
+    const r = apply(s, { type: 'DISCARD', playerId: 'p2', card: dump, at: 2 });
     expect(r.result.ok).toBe(true);
-    expect(s.turnSeat).toBe(0); // turn advanced to p1
+    expect(s.hands.p2).toHaveLength(7);
+    expect(s.turnSeat).toBe(0); // advanced to p1
     expect(s.discard[s.discard.length - 1]).toBe(dump);
   });
 });
 
 describe('Draw + discard turn cycle', () => {
-  it('non-dealer draws stock, then discards, advancing the turn', () => {
+  it('dealer draws stock, then discards, advancing the turn', () => {
     const s = lobby2();
-    startAndDeclineUpcards(s, 100);
+    startAndCompleteOpeningTurn(s, 100);
+    // Now it's p1's (dealer's) turn — normal draw/discard cycle.
     const before = s.stock.length;
-    const r1 = apply(s, { type: 'DRAW_STOCK', playerId: 'p2', at: 200 });
+    const r1 = apply(s, { type: 'DRAW_STOCK', playerId: 'p1', at: 200 });
     expect(r1.result.ok).toBe(true);
     expect(s.stock.length).toBe(before - 1);
-    expect(s.hands.p2).toHaveLength(8);
+    expect(s.hands.p1).toHaveLength(8);
 
-    const drop = s.hands.p2![0]!;
-    const r2 = apply(s, { type: 'DISCARD', playerId: 'p2', card: drop, at: 201 });
+    const drop = s.hands.p1![0]!;
+    const r2 = apply(s, { type: 'DISCARD', playerId: 'p1', card: drop, at: 201 });
     expect(r2.result.ok).toBe(true);
-    expect(s.hands.p2).toHaveLength(7);
-    expect(s.turnSeat).toBe(0);
+    expect(s.hands.p1).toHaveLength(7);
+    expect(s.turnSeat).toBe(1);
   });
 
-  it('cannot discard before drawing', () => {
+  it('cannot discard before drawing on a normal turn', () => {
     const s = lobby2();
-    startAndDeclineUpcards(s, 100);
-    const r = apply(s, { type: 'DISCARD', playerId: 'p2', card: s.hands.p2![0]!, at: 200 });
+    startAndCompleteOpeningTurn(s, 100);
+    // p1's turn now; they have not drawn.
+    const r = apply(s, { type: 'DISCARD', playerId: 'p1', card: s.hands.p1![0]!, at: 200 });
     expect(r.result.ok).toBe(false);
   });
 
   it('cannot draw twice', () => {
     const s = lobby2();
-    startAndDeclineUpcards(s, 100);
-    apply(s, { type: 'DRAW_STOCK', playerId: 'p2', at: 200 });
-    const r = apply(s, { type: 'DRAW_DISCARD', playerId: 'p2', at: 201 });
+    startAndCompleteOpeningTurn(s, 100);
+    apply(s, { type: 'DRAW_STOCK', playerId: 'p1', at: 200 });
+    const r = apply(s, { type: 'DRAW_DISCARD', playerId: 'p1', at: 201 });
     expect(r.result.ok).toBe(false);
   });
 
   it('draw_discard takes the visible top discard', () => {
     const s = lobby2();
-    startAndDeclineUpcards(s, 100);
+    startAndCompleteOpeningTurn(s, 100);
+    // p2's first-turn discard is the only card on the discard pile.
     const top = s.discard[s.discard.length - 1]!;
-    apply(s, { type: 'DRAW_DISCARD', playerId: 'p2', at: 200 });
-    expect(s.hands.p2).toContain(top);
+    apply(s, { type: 'DRAW_DISCARD', playerId: 'p1', at: 200 });
+    expect(s.hands.p1).toContain(top);
     expect(s.discard).toHaveLength(0);
   });
 });
 
 describe('LAY_MELD', () => {
+  // Most LAY_MELD tests below rig p2's hand to 7 cards and run a normal draw + meld
+  // cycle from p2's perspective. The new dealer rule gives p2 a bonus 8th card and
+  // marks the deal as their draw, so we reset `_turnState` here to mimic a fresh
+  // pre-draw turn for the rigged hand. (rigState replaces the cards anyway.)
   function setupTwoPlayer(): GameState {
     const s = lobby2({ acesMode: 'high' });
-    startAndDeclineUpcards(s, 100);
+    apply(s, { type: 'START_GAME', at: 100 });
+    s._turnState = { drewThisTurn: false };
     return s;
   }
 
@@ -218,7 +219,8 @@ describe('LAY_MELD', () => {
 describe('Layoff rules (extending opponent melds)', () => {
   it('blocks layoff on opponent if you have no own meld this round', () => {
     const s = lobby2({ acesMode: 'high' });
-    startAndDeclineUpcards(s, 100);
+    apply(s, { type: 'START_GAME', at: 100 });
+    s._turnState = { drewThisTurn: false };
     // Set p1 hand with a meld they'll lay; p2 has the extension card.
     rigState(
       s,
@@ -267,7 +269,8 @@ describe('Layoff rules (extending opponent melds)', () => {
 
   it('allows layoff on opponent once you have your own meld', () => {
     const s = lobby2({ acesMode: 'high' });
-    startAndDeclineUpcards(s, 100);
+    apply(s, { type: 'START_GAME', at: 100 });
+    s._turnState = { drewThisTurn: false };
     rigState(
       s,
       {
@@ -313,7 +316,8 @@ describe('Layoff rules (extending opponent melds)', () => {
 describe('Wild stealing', () => {
   it('lets the natural-card holder steal a wild before drawing', () => {
     const s = lobby2({ acesMode: 'high' });
-    startAndDeclineUpcards(s, 100);
+    apply(s, { type: 'START_GAME', at: 100 });
+    s._turnState = { drewThisTurn: false };
     // Round 1 wild = 2.
     rigState(
       s,
@@ -360,7 +364,8 @@ describe('Wild stealing', () => {
 
   it('rejects steal after drawing this turn', () => {
     const s = lobby2({ acesMode: 'high' });
-    startAndDeclineUpcards(s, 100);
+    apply(s, { type: 'START_GAME', at: 100 });
+    s._turnState = { drewThisTurn: false };
     rigState(
       s,
       {
@@ -399,7 +404,8 @@ describe('Wild stealing', () => {
 describe('Going out (gin)', () => {
   it('discarding the last card after melding ends the round and scores', () => {
     const s = lobby2({ acesMode: 'high' });
-    startAndDeclineUpcards(s, 100);
+    apply(s, { type: 'START_GAME', at: 100 });
+    s._turnState = { drewThisTurn: false };
     // p2 holds: 7S 7H 7D | 4S 4H 4D | 9C, will lay both melds and discard 9C.
     rigState(
       s,
@@ -458,7 +464,8 @@ describe('Going out (gin)', () => {
     // without first using LAY_MELD. But discarding to zero cards while having no melds
     // shouldn't end the round — verify the engine keeps the turn going.
     const s = lobby2({ acesMode: 'high' });
-    startAndDeclineUpcards(s, 100);
+    apply(s, { type: 'START_GAME', at: 100 });
+    s._turnState = { drewThisTurn: false };
     // Give p2 a small contrived hand (note: they already have 7 from real deal; rigState replaces).
     rigState(
       s,
@@ -476,25 +483,32 @@ describe('Going out (gin)', () => {
 });
 
 describe('Auto-play on timer expiry', () => {
-  it('draws stock and discards the same card', () => {
+  it('draws stock and discards the same card on a normal turn', () => {
     const s = lobby2();
-    startAndDeclineUpcards(s, 100);
+    startAndCompleteOpeningTurn(s, 100);
+    // p1's turn now; this is a normal pre-draw turn.
     const stockBefore = s.stock.length;
     const r = apply(s, { type: 'AUTO_PLAY', at: 1_000 });
     expect(r.result.ok).toBe(true);
     expect(s.stock.length).toBe(stockBefore - 1);
-    expect(s.hands.p2).toHaveLength(7); // unchanged
-    // Turn advanced.
-    expect(s.turnSeat).toBe(0);
+    expect(s.hands.p1).toHaveLength(7); // unchanged
+    expect(s.turnSeat).toBe(1);
   });
 
-  it('declines an upcard during awaiting_upcard phase', () => {
+  it('discards the bonus card on the first turn of a round', () => {
     const s = lobby2();
     apply(s, { type: 'START_GAME', at: 1 });
-    const r = apply(s, { type: 'AUTO_PLAY', at: 2 });
+    const bonus = s._turnState!.drewCard!;
+    expect(s.hands.p2).toContain(bonus);
+    const stockBefore = s.stock.length;
+    const r = apply(s, { type: 'AUTO_PLAY', at: 1_000 });
     expect(r.result.ok).toBe(true);
-    // After one auto-play, turn passes to dealer for second offer.
-    expect(s.phase).toBe('awaiting_upcard');
+    // Stock should be untouched — the bonus came from the player's hand, not from the stock.
+    expect(s.stock.length).toBe(stockBefore);
+    expect(s.hands.p2).toHaveLength(7);
+    expect(s.hands.p2).not.toContain(bonus);
+    expect(s.discard[s.discard.length - 1]).toBe(bonus);
+    // Turn advanced to the dealer.
     expect(s.turnSeat).toBe(0);
   });
 });
@@ -502,14 +516,14 @@ describe('Auto-play on timer expiry', () => {
 describe('Stock reshuffle', () => {
   it('reshuffles the discard back when stock empties', () => {
     const s = lobby2();
-    startAndDeclineUpcards(s, 100);
-    // Move all but one stock card into the discard pile.
+    startAndCompleteOpeningTurn(s, 100);
+    // It's now p1's turn. Move all but one stock card into the discard pile.
     while (s.stock.length > 0) {
       const c = s.stock.pop()!;
       s.discard.push(c);
     }
-    // p2 draws stock — should trigger reshuffle.
-    const r = apply(s, { type: 'DRAW_STOCK', playerId: 'p2', at: 200 });
+    // p1 draws stock — should trigger reshuffle.
+    const r = apply(s, { type: 'DRAW_STOCK', playerId: 'p1', at: 200 });
     expect(r.result.ok).toBe(true);
     expect(s.log.some((e) => e.type === 'stock_reshuffled')).toBe(true);
   });
@@ -525,14 +539,13 @@ describe('Card conservation invariant', () => {
       for (const m of s.meldsOnTable) n += m.cards.length;
       return n;
     }
+    // After the deal: 7 + 8 + 0 (discard) + 37 (stock) = 52.
     expect(count(s)).toBe(52);
-    apply(s, { type: 'ACCEPT_UPCARD', playerId: 'p2', at: 2 });
+    apply(s, { type: 'DISCARD', playerId: 'p2', card: s.hands.p2![0]!, at: 2 });
     expect(count(s)).toBe(52);
-    apply(s, { type: 'DISCARD', playerId: 'p2', card: s.hands.p2![0]!, at: 3 });
+    apply(s, { type: 'DRAW_STOCK', playerId: 'p1', at: 3 });
     expect(count(s)).toBe(52);
-    apply(s, { type: 'DRAW_STOCK', playerId: 'p1', at: 4 });
-    expect(count(s)).toBe(52);
-    apply(s, { type: 'DISCARD', playerId: 'p1', card: s.hands.p1![0]!, at: 5 });
+    apply(s, { type: 'DISCARD', playerId: 'p1', card: s.hands.p1![0]!, at: 4 });
     expect(count(s)).toBe(52);
   });
 });

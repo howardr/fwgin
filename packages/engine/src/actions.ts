@@ -8,8 +8,6 @@ import type { Card, MeldId, PlayerId } from '@fwgin/shared';
 
 export type Action =
   | { type: 'START_GAME'; at: number }
-  | { type: 'ACCEPT_UPCARD'; playerId: PlayerId; at: number }
-  | { type: 'DECLINE_UPCARD'; playerId: PlayerId; at: number }
   | { type: 'STEAL_WILD'; playerId: PlayerId; meldId: MeldId; surrender: Card; at: number }
   | { type: 'DRAW_STOCK'; playerId: PlayerId; at: number }
   | { type: 'DRAW_DISCARD'; playerId: PlayerId; at: number }

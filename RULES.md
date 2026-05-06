@@ -11,7 +11,10 @@ and tests need to change with it.
 ## Setup per round
 
 - Each player is dealt **7 cards**.
-- The next card from the stock is turned face-up to start the discard pile.
+- The player to the dealer's left (the first to play) is dealt **one extra card**, for
+  a starting hand of **8**. This stands in for the first player's draw step on their
+  opening turn — they begin the round already "drawn".
+- The discard pile starts **empty**. No upcard is turned.
 - Remaining cards form the stock, face-down.
 - The dealer rotates clockwise each round.
 - Round 1's dealer is chosen at random.
@@ -44,6 +47,9 @@ On your turn, in order:
    the **exact natural card** that wild was declared to represent, you may surrender that
    natural card to the meld and take the wild into your hand. Limit one steal per turn.
 2. **Draw.** Take either the top of the **stock** or the top of the **discard**.
+   Skipped on the **first turn of each round** for the player who received the bonus
+   8th card during the deal — the deal counts as their draw, so they cannot steal a
+   wild and must proceed directly to the meld/discard steps.
 3. **Optional — Lay melds and lay-offs.**
    - Lay one or more new melds from your hand to the table (yours).
    - Extend any existing meld owned by you.
@@ -115,8 +121,9 @@ After 13 rounds, the player with the **lowest cumulative score wins**.
 
 - Each game has a per-turn timer (default **24 hours**, configurable from 1 minute upward).
 - When a turn timer expires, the server performs an **auto-play**:
-  - Draw the top of the stock.
-  - Discard the card just drawn.
+  - On a normal turn: draw the top of the stock and discard that same card.
+  - On the **first turn of a round** (the bonus-card holder has not yet acted): discard
+    the bonus 8th card that was dealt to them.
 - No melds are laid or stolen on auto-play. The auto-play is logged.
 
 ## Discard pile visibility

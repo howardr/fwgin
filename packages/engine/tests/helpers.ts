@@ -47,4 +47,8 @@ export function rigState(
   all.delete(discardTop);
   s.stock = [...all, ...[...stockTop].reverse()]; // last-in is drawn first
   s.discard = [discardTop];
+  // Rigging implies a controlled, fresh turn. The real deal sets `_turnState` for the
+  // first player; tests typically want to take a normal draw/discard cycle on the
+  // current turnSeat, so reset the turn-state to "not yet drawn".
+  s._turnState = { drewThisTurn: false };
 }

@@ -6,10 +6,8 @@ describe('Round-end scoring', () => {
   it('winner scores 0; loser scores their deadwood', () => {
     const s = lobby2({ acesMode: 'high' });
     apply(s, { type: 'START_GAME', at: 1 });
-    // Decline upcards.
-    apply(s, { type: 'DECLINE_UPCARD', playerId: 'p2', at: 2 });
-    apply(s, { type: 'DECLINE_UPCARD', playerId: 'p1', at: 3 });
-    // Force p2 to win with a hand-rig.
+    // Force p2 to win with a hand-rig. Reset the deal-time turn state so we exercise
+    // a normal draw + meld + discard sequence below.
     s.hands = {
       p1: ['KH', 'KD', 'KC', 'QS', 'JC', 'TS', '5H'],
       p2: ['7S', '7H', '7D', '4S', '4H', '4D', '4C'],

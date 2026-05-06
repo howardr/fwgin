@@ -116,7 +116,7 @@ describe('GameDO HTTP surface', () => {
     const r4 = await stub.fetch('https://do.local/state?userId=u1');
     expect(r4.ok).toBe(true);
     const view = (await r4.json()) as { phase: string; round: number };
-    expect(view.phase).toBe('awaiting_upcard');
+    expect(view.phase).toBe('in_round');
     expect(view.round).toBe(1);
   });
 
