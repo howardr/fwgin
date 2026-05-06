@@ -1,39 +1,44 @@
 /**
- * Bare-bones App shell. Phase 4 will replace this with the real router + game UI.
+ * Root app shell with very small hash-based routing:
+ *   #/                     -> Landing
+ *   #/games/:id            -> Game (lobby/table/end)
  */
-import { useEffect, useState } from 'react';
 
-interface Me {
-  id: string;
-  displayName: string;
+import { useEffect, useState } from 'react';
+import { Game } from './screens/Game.js';
+import { Landing } from './screens/Landing.js';
+
+function parseHash(): { name: 'home' } | { name: 'game'; id: string } | { name: 'unknown' } {
+  const h = window.location.hash || '#/';
+  if (h === '#/' || h === '#' || h === '') return { name: 'home' };
+  const m = h.match(/^#\/games\/([a-zA-Z0-9]+)$/);
+  if (m) return { name: 'game', id: m[1]! };
+  return { name: 'unknown' };
 }
 
 export function App() {
-  const [me, setMe] = useState<Me | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [route, setRoute] = useState(parseHash);
 
   useEffect(() => {
-    fetch('/api/me', { credentials: 'include' })
-      .then((r) => r.json())
-      .then(setMe)
-      .catch((e) => setError(String(e)));
+    const onHash = () => setRoute(parseHash());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
+  function navigate(hash: string) {
+    if (window.location.hash === hash) {
+      setRoute(parseHash());
+    } else {
+      window.location.hash = hash;
+    }
+  }
+
+  if (route.name === 'home') return <Landing onNavigate={navigate} />;
+  if (route.name === 'game') return <Game gameId={route.id} onNavigate={navigate} />;
   return (
     <main className="container">
-      <h1>Fort Worth Gin</h1>
-      {error && <p className="error">{error}</p>}
-      {me ? (
-        <p>
-          Hello, <strong>{me.displayName}</strong>
-        </p>
-      ) : (
-        <p>Loading…</p>
-      )}
-      <p className="muted">
-        The full game UI will land in the next milestone — for now this just verifies the Worker →
-        DB session flow is healthy.
-      </p>
+      <p>Page not found.</p>
+      <a href="#/">Home</a>
     </main>
   );
 }
