@@ -27,6 +27,7 @@ import {
   type GameState,
   type PlayerId,
   type ServerMsg,
+  type ViewForClient,
 } from '@fwgin/shared';
 import type { Env } from '../env.js';
 import { notifyPlayerTurn } from '../push/notify.js';
@@ -163,6 +164,11 @@ export class GameDO extends DurableObject<Env> {
       youAre: isPlayer ? userId : null,
       spectator: !isPlayer,
     });
+    // Broadcast presence to everyone else so they see this player came online.
+    // Only meaningful for seated players. The new socket has already received its own
+    // initial state above, so we skip it as a recipient. The new socket *is* counted
+    // when computing presence (it appears in getWebSockets() now that it's accepted).
+    if (isPlayer) this.broadcast({ skipRecipient: server });
     return new Response(null, { status: 101, webSocket: client });
   }
 
@@ -232,17 +238,18 @@ export class GameDO extends DurableObject<Env> {
     await this.afterAction(before);
   }
 
-  override async webSocketClose(
-    _ws: WebSocket,
-    _code: number,
-    _reason: string,
-    _wasClean: boolean,
-  ) {
-    // Hibernation will reload us next time. Nothing to do.
+  override async webSocketClose(ws: WebSocket, _code: number, _reason: string, _wasClean: boolean) {
+    // Notify the rest of the table that this user may have just gone offline. We exclude
+    // the closing socket from the broadcast and let `getOnlineUserIds()` (which reads
+    // `getWebSockets()`) recompute presence from the live session map. If the same user
+    // still has another open socket (e.g. a second tab), they remain online.
+    this.broadcastPresenceIfPlayer(ws);
   }
 
-  override async webSocketError(_ws: WebSocket, _err: unknown) {
-    // No-op; the runtime will close us.
+  override async webSocketError(ws: WebSocket, _err: unknown) {
+    // Same treatment as a clean close — the runtime will tear down the socket and the
+    // remaining sessions should learn about it.
+    this.broadcastPresenceIfPlayer(ws);
   }
 
   override async alarm() {
@@ -347,21 +354,72 @@ export class GameDO extends DurableObject<Env> {
     }
   }
 
-  private sendStateTo(ws: WebSocket, meta: SessionMeta): void {
-    if (!this.game) return;
+  /**
+   * Build a view for the given session and overlay the current online-presence map. The
+   * engine view-builders default `online` to false; we know who is actually connected by
+   * inspecting `getWebSockets()`, so we patch it here.
+   *
+   * `treatAsOffline`, when provided, is omitted from the presence map. We use this during
+   * `webSocketClose`/`webSocketError`, where the closing socket may still be returned by
+   * `getWebSockets()` until the runtime reaps it but should be treated as gone.
+   */
+  private buildView(meta: SessionMeta, treatAsOffline?: WebSocket): ViewForClient {
+    if (!this.game) throw new Error('No game state');
     const view = meta.spectator
       ? viewForSpectator(this.game)
       : viewForPlayer(this.game, meta.userId);
-    this.sendTo(ws, { type: 'state', view });
+    const online = this.getOnlineUserIds(treatAsOffline);
+    return {
+      ...view,
+      players: view.players.map((p) => ({ ...p, online: online.has(p.id) })),
+    };
   }
 
-  private broadcast(): void {
+  private sendStateTo(ws: WebSocket, meta: SessionMeta, treatAsOffline?: WebSocket): void {
+    if (!this.game) return;
+    this.sendTo(ws, { type: 'state', view: this.buildView(meta, treatAsOffline) });
+  }
+
+  /**
+   * Send a fresh view to every connected session. Two optional knobs:
+   * - `skipRecipient` — don't send the broadcast to this specific socket (typically the
+   *   one that just received a more direct state update).
+   * - `treatAsOffline` — exclude this socket when computing presence. Use this on close
+   *   so the disconnecting user shows as offline immediately, even if the runtime hasn't
+   *   yet removed the socket from `getWebSockets()`.
+   */
+  private broadcast(opts: { skipRecipient?: WebSocket; treatAsOffline?: WebSocket } = {}): void {
     if (!this.game) return;
     for (const ws of this.ctx.getWebSockets()) {
+      if (ws === opts.skipRecipient) continue;
       const meta = this.metaFor(ws);
       if (!meta) continue;
-      this.sendStateTo(ws, meta);
+      this.sendStateTo(ws, meta, opts.treatAsOffline);
     }
+  }
+
+  /** Iterate live WS sessions and return the set of currently-connected userIds. */
+  private getOnlineUserIds(treatAsOffline?: WebSocket): Set<PlayerId> {
+    const ids = new Set<PlayerId>();
+    for (const ws of this.ctx.getWebSockets()) {
+      if (ws === treatAsOffline) continue;
+      const tags = this.ctx.getTags(ws);
+      for (const t of tags) {
+        if (t.startsWith('user:')) ids.add(t.slice(5));
+      }
+    }
+    return ids;
+  }
+
+  /**
+   * Helper invoked from `webSocketClose`/`webSocketError`. Only seated players' presence
+   * is visible in the player list, so spectator disconnects don't need to wake the rest
+   * of the table.
+   */
+  private broadcastPresenceIfPlayer(ws: WebSocket): void {
+    const meta = this.metaFor(ws);
+    if (!meta || meta.spectator) return;
+    this.broadcast({ skipRecipient: ws, treatAsOffline: ws });
   }
 
   private broadcastMsg(msg: ServerMsg): void {

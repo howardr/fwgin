@@ -28,7 +28,6 @@ export function newGameState(input: NewGameInput): GameState {
     id: input.hostId,
     displayName: input.hostName,
     seat: 0,
-    online: true,
   };
   return {
     id: input.id,
@@ -60,7 +59,7 @@ export function addPlayerToLobby(state: GameState, playerId: PlayerId, displayNa
   if (state.players.find((p) => p.id === playerId)) return; // idempotent
   if (state.players.length >= state.config.maxPlayers) throw new Error('Lobby is full');
   const seat = nextFreeSeat(state);
-  state.players.push({ id: playerId, displayName, seat, online: true });
+  state.players.push({ id: playerId, displayName, seat });
   if (!state.scores[playerId]) state.scores[playerId] = [];
 }
 

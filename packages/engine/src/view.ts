@@ -10,9 +10,12 @@ export function viewForPlayer(state: GameState, playerId: PlayerId): PlayerView 
     kind: 'player',
     id: state.id,
     config: state.config,
+    // `online` defaults to false here; the GameDO populates accurate values from the live
+    // WebSocket session map before broadcasting.
     players: state.players.map((p) => ({
       ...p,
       handCount: (state.hands[p.id] ?? []).length,
+      online: false,
     })),
     hostId: state.hostId,
     phase: state.phase,
@@ -38,9 +41,12 @@ export function viewForSpectator(state: GameState): SpectatorView {
     kind: 'spectator',
     id: state.id,
     config: state.config,
+    // `online` defaults to false here; the GameDO populates accurate values from the live
+    // WebSocket session map before broadcasting.
     players: state.players.map((p) => ({
       ...p,
       handCount: (state.hands[p.id] ?? []).length,
+      online: false,
     })),
     hostId: state.hostId,
     phase: state.phase,

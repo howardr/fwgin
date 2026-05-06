@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 import { Hand } from '../components/Hand.js';
 import { MeldArea } from '../components/MeldArea.js';
 import { Pile } from '../components/Pile.js';
+import { PresenceDot } from '../components/PresenceDot.js';
 import { Scoreboard } from '../components/Scoreboard.js';
 import { TurnTimer } from '../components/TurnTimer.js';
 import { useGameSocket } from '../hooks/useGameSocket.js';
@@ -63,7 +64,8 @@ export function Game({ gameId, onNavigate }: { gameId: string; onNavigate(hash: 
 
   // Live-merge: whenever the WS pushes a fresh view, the players array is the
   // authoritative live one. We splice it back into our `lobby` state so the Lobby
-  // component sees new joiners without any extra REST calls.
+  // component sees new joiners (and online-presence updates) without any extra REST
+  // calls.
   useEffect(() => {
     if (!view) return;
     setLobby((prev) => {
@@ -78,6 +80,7 @@ export function Game({ gameId, onNavigate }: { gameId: string; onNavigate(hash: 
           seat: p.seat,
           displayName: p.displayName,
           joinedAt: known.get(p.id)?.joinedAt ?? Date.now(),
+          online: p.online,
         }));
       return { ...prev, players: merged };
     });
@@ -210,6 +213,7 @@ function Lobby({
         <ul className="player-list">
           {lobby.players.map((p) => (
             <li key={p.id}>
+              <PresenceDot online={p.online} />
               {p.displayName}
               {p.id === lobby.hostId && <span className="badge">host</span>}
               {lobby.youAre.kind === 'player' && p.id === lobby.youAre.id && (
@@ -403,7 +407,10 @@ function Table({
                 key={p.id}
                 className={`player ${p.seat === view.turnSeat ? 'turn' : ''} ${p.id === yourId ? 'self' : ''}`}
               >
-                <span className="player-name">{p.displayName}</span>
+                <span className="player-name">
+                  <PresenceDot online={p.online} />
+                  {p.displayName}
+                </span>
                 <span className="player-info">
                   {p.handCount} card{p.handCount === 1 ? '' : 's'}
                   {p.id === lobby.hostId && <span className="badge">host</span>}

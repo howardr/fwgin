@@ -30,7 +30,18 @@ export interface GameLobby {
   };
   inviteCode: string;
   createdAt: number;
-  players: { id: string; seat: number; displayName: string; joinedAt: number }[];
+  /**
+   * `online` is filled in once the WebSocket pushes a fresh view (the REST endpoint
+   * doesn't know about WS sessions). Defaults to `false` until the first WS state
+   * snapshot arrives and live-merges presence into this list.
+   */
+  players: {
+    id: string;
+    seat: number;
+    displayName: string;
+    joinedAt: number;
+    online: boolean;
+  }[];
   youAre: { kind: 'player'; id: string } | { kind: 'spectator' };
 }
 

@@ -476,6 +476,23 @@ a:hover {
   background: var(--success);
 }
 
+/* Presence indicator for individual players (lobby + game-board). Subtler than the
+   header status-dot since one renders per player. */
+.presence-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  margin-right: 0.4rem;
+  vertical-align: middle;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+.presence-dot.on {
+  background: var(--success);
+  box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.25);
+}
+
 .table-header {
   position: sticky;
   top: 0;
