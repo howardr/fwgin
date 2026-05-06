@@ -1,0 +1,23 @@
+packages/worker/wrangler.toml
+  1fe86370e16547df 30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "0c5385e542e567cc4eb2f88f4b76b99436a27161",
+  "prompts": {
+    "1fe86370e16547df": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_201a41955ffekJINl0pbuwrwe3",
+        "model": "anthropic/claude-opus-4-7"
+      },
+      "human_author": "Howard Rauscher",
+      "messages": [],
+      "total_additions": 1,
+      "total_deletions": 1,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    }
+  }
+}
