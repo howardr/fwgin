@@ -8,6 +8,16 @@
  * Click vs drag is distinguished by a small movement threshold: if the pointer moves
  * less than DRAG_THRESHOLD_PX between down and up, the gesture is treated as a click.
  *
+ * Important interaction quirk: `setPointerCapture` is called in `pointerdown` so the
+ * drag gesture stays "glued" to the originating card even if the pointer leaves it.
+ * Per the Pointer Events spec, compatibility mouse events (including the synthetic
+ * `click`) are also dispatched to the captured element — so clicking a card without
+ * dragging makes the `click` fire on the wrapping `<div>` instead of the inner
+ * `<button>`, and the button's `onClick` (which would toggle selection) never runs.
+ * To make a no-movement release behave as a click, `endDrag` calls `onToggle` directly
+ * when `isDragging` is false. The button's `onClick` is preserved for keyboard users
+ * (Tab + Enter), where there is no pointer capture to redirect the click.
+ *
  * The hand displayed here is computed from two inputs:
  *   - `hand`: the authoritative server-side hand for this player (order from server)
  *   - `customOrder`: the player's own preferred ordering, applied on top
@@ -72,7 +82,15 @@ export function Hand({ hand, selected, wildRank, customOrder, onToggle, onReorde
   function handlePointerDown(idx: number, ev: ReactPointerEvent<HTMLDivElement>) {
     // Mouse: only respond to the primary (left) button.
     if (ev.pointerType === 'mouse' && ev.button !== 0) return;
-    ev.currentTarget.setPointerCapture(ev.pointerId);
+    // Reset any stale suppress flag from a prior interaction whose synthetic click
+    // never made it to handleClickCapture (rare, but safe to clear at the start of
+    // every fresh gesture).
+    suppressClickRef.current = false;
+    try {
+      ev.currentTarget.setPointerCapture(ev.pointerId);
+    } catch {
+      /* setPointerCapture missing (e.g. jsdom) or rejected; the gesture still works */
+    }
     setDragState({
       cardIndex: idx,
       pointerId: ev.pointerId,
@@ -114,13 +132,22 @@ export function Hand({ hand, selected, wildRank, customOrder, onToggle, onReorde
   function endDrag(ev: ReactPointerEvent<HTMLDivElement>, commit: boolean) {
     if (!dragState || ev.pointerId !== dragState.pointerId) return;
     if (dragState.isDragging) {
-      // Suppress the upcoming click event so the drop doesn't also toggle selection.
-      suppressClickRef.current = true;
       if (commit) {
         const next = reorder(displayHand, dragState.cardIndex, dragState.dropTargetGap);
         if (next !== displayHand) onReorder(next);
       }
+    } else {
+      // No drag movement: this was a click. Pointer capture (set in pointerdown)
+      // redirects the synthetic click to the wrapping div, so the inner button's
+      // onClick never fires. Toggle selection directly here so a tap/click on a
+      // card actually selects it.
+      const card = displayHand[dragState.cardIndex];
+      if (card !== undefined) onToggle(card);
     }
+    // Either branch: suppress the synthetic click that follows pointerup so we don't
+    // double-fire (drag → reorder + click toggle, or click → onToggle + click toggle)
+    // in browsers where the click does still bubble through.
+    suppressClickRef.current = true;
     try {
       ev.currentTarget.releasePointerCapture(ev.pointerId);
     } catch {

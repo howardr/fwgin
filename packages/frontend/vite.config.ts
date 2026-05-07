@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
@@ -18,5 +19,11 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
+  },
+  test: {
+    // jsdom is required for the component-level tests under src/components/.
+    // Pure logic tests (e.g. computeDisplayHand) work in either environment;
+    // jsdom is a small superset, so use it everywhere for simplicity.
+    environment: 'jsdom',
   },
 });
