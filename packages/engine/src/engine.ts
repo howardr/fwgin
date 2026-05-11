@@ -18,6 +18,7 @@ import {
   type MeldId,
   type Player,
   type PlayerId,
+  canonicalizeMeld,
   extensionsFor,
   rankOf,
   validateMeld,
@@ -310,13 +311,20 @@ function layMeld(
   // Move the cards.
   for (const c of cards) takeFromHand(state, playerId, c);
 
+  // Sort the meld into canonical display order so that runs read sequentially and
+  // wilds sit in the position of the natural card they represent.
+  const canon = canonicalizeMeld(
+    { kind: validation.kind, cards, wildSlot, wildRepresents },
+    state.config.acesMode,
+  );
+
   const id = nextMeldId(state);
   const meld: Meld = {
     id,
     ownerId: playerId,
     kind: validation.kind,
-    cards,
-    wildSlot,
+    cards: canon.cards,
+    wildSlot: canon.wildSlot,
     wildRepresents,
     round: state.round,
   };
@@ -325,7 +333,7 @@ function layMeld(
     type: 'meld_laid',
     playerId,
     meldId: id,
-    cards,
+    cards: canon.cards,
     wildRepresents,
     at,
   });
@@ -431,8 +439,22 @@ function extendMeld(
 
   // Move cards.
   for (const c of cards) takeFromHand(state, playerId, c);
-  meld.cards = combined;
-  meld.wildSlot = newWildSlot;
+
+  // Re-sort the extended meld into canonical order. Either the existing meld already
+  // had a wild and the layoff is a natural card joining at an end, or the layoff adds
+  // a wild that needs to sit at its represented position — both cases benefit from a
+  // single, deterministic re-canonicalization.
+  const canon = canonicalizeMeld(
+    {
+      kind: meld.kind,
+      cards: combined,
+      wildSlot: newWildSlot,
+      wildRepresents: newWildRepresents,
+    },
+    state.config.acesMode,
+  );
+  meld.cards = canon.cards;
+  meld.wildSlot = canon.wildSlot;
   meld.wildRepresents = newWildRepresents;
 
   logEvent(state, {

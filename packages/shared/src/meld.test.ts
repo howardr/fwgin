@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extensionsFor, validateMeld } from './meld.js';
+import { canonicalizeMeld, extensionsFor, validateMeld } from './meld.js';
 
 describe('validateMeld — sets', () => {
   it('accepts a 3-card set', () => {
@@ -147,6 +147,105 @@ describe('validateMeld — wild slot consistency', () => {
 
   it('rejects duplicate physical cards', () => {
     expect(validateMeld({ kind: 'set', cards: ['7S', '7S', '7H'] }, '2', 'high').ok).toBe(false);
+  });
+});
+
+describe('canonicalizeMeld — sets', () => {
+  it('orders a set by suit S/H/D/C regardless of input order', () => {
+    const r = canonicalizeMeld({ kind: 'set', cards: ['7D', '7C', '7H', '7S'] }, 'high');
+    expect(r.cards).toEqual(['7S', '7H', '7D', '7C']);
+    expect(r.wildSlot).toBeUndefined();
+  });
+
+  it('places a wild at its represented suit position', () => {
+    // Wild=2H representing 7C (a Club); should slot after 7D in S/H/D/C order.
+    const r = canonicalizeMeld(
+      { kind: 'set', cards: ['7H', '2H', '7S'], wildSlot: 1, wildRepresents: '7C' },
+      'high',
+    );
+    expect(r.cards).toEqual(['7S', '7H', '2H']);
+    expect(r.wildSlot).toBe(2);
+  });
+
+  it('places a wild that represents a middle suit between its neighbours', () => {
+    // Wild=2C representing 7H (Hearts) in a set of {7S, 7H(via wild), 7D}.
+    const r = canonicalizeMeld(
+      { kind: 'set', cards: ['7D', '2C', '7S'], wildSlot: 1, wildRepresents: '7H' },
+      'high',
+    );
+    expect(r.cards).toEqual(['7S', '2C', '7D']);
+    expect(r.wildSlot).toBe(1);
+  });
+
+  it('is idempotent for an already-canonical set', () => {
+    const r = canonicalizeMeld({ kind: 'set', cards: ['7S', '7H', '7D'] }, 'high');
+    expect(r.cards).toEqual(['7S', '7H', '7D']);
+  });
+});
+
+describe('canonicalizeMeld — runs', () => {
+  it('sorts a 3-card run in ascending rank order', () => {
+    const r = canonicalizeMeld({ kind: 'run', cards: ['7C', '5C', '6C'] }, 'high');
+    expect(r.cards).toEqual(['5C', '6C', '7C']);
+    expect(r.wildSlot).toBeUndefined();
+  });
+
+  it('places a wild representing a mid-run card between its neighbours', () => {
+    // Wild=2D representing 6H sits between 5H and 7H.
+    const r = canonicalizeMeld(
+      { kind: 'run', cards: ['7H', '5H', '2D'], wildSlot: 2, wildRepresents: '6H' },
+      'high',
+    );
+    expect(r.cards).toEqual(['5H', '2D', '7H']);
+    expect(r.wildSlot).toBe(1);
+  });
+
+  it('places a wild representing the high end at the high end', () => {
+    // Wild=2D representing 8H, run is 5H 6H 7H + W.
+    const r = canonicalizeMeld(
+      { kind: 'run', cards: ['2D', '5H', '6H', '7H'], wildSlot: 0, wildRepresents: '8H' },
+      'high',
+    );
+    expect(r.cards).toEqual(['5H', '6H', '7H', '2D']);
+    expect(r.wildSlot).toBe(3);
+  });
+
+  it('places a wild representing the low end at the low end', () => {
+    // Wild=2D representing 4H, run is W + 5H 6H 7H.
+    const r = canonicalizeMeld(
+      { kind: 'run', cards: ['5H', '6H', '7H', '2D'], wildSlot: 3, wildRepresents: '4H' },
+      'high',
+    );
+    expect(r.cards).toEqual(['2D', '5H', '6H', '7H']);
+    expect(r.wildSlot).toBe(0);
+  });
+
+  it('orders a low-ace run as A-2-3 when acesMode=low', () => {
+    const r = canonicalizeMeld({ kind: 'run', cards: ['3H', 'AH', '2H'] }, 'low');
+    expect(r.cards).toEqual(['AH', '2H', '3H']);
+  });
+
+  it('orders a high-ace run as Q-K-A when acesMode=high', () => {
+    const r = canonicalizeMeld({ kind: 'run', cards: ['AH', 'QH', 'KH'] }, 'high');
+    expect(r.cards).toEqual(['QH', 'KH', 'AH']);
+  });
+
+  it('picks the right ace orientation in acesMode=either', () => {
+    expect(canonicalizeMeld({ kind: 'run', cards: ['3H', 'AH', '2H'] }, 'either').cards).toEqual([
+      'AH',
+      '2H',
+      '3H',
+    ]);
+    expect(canonicalizeMeld({ kind: 'run', cards: ['AH', 'QH', 'KH'] }, 'either').cards).toEqual([
+      'QH',
+      'KH',
+      'AH',
+    ]);
+  });
+
+  it('is idempotent for an already-canonical run', () => {
+    const r = canonicalizeMeld({ kind: 'run', cards: ['5H', '6H', '7H'] }, 'high');
+    expect(r.cards).toEqual(['5H', '6H', '7H']);
   });
 });
 

@@ -16,6 +16,7 @@ import {
   type Card,
   RANKS,
   type Rank,
+  SUITS,
   type Suit,
   parseCard,
   rankIndex,
@@ -269,6 +270,69 @@ export function extensionsFor(meld: MeldShape, wildRank: Rank, acesMode: AcesMod
     }
   }
   return result;
+}
+
+/**
+ * Reorder a meld's cards into canonical display order, updating `wildSlot` to match.
+ *
+ * - **Sets** are sorted by the effective suit using the canonical S/H/D/C order. The wild's
+ *   effective suit comes from `wildRepresents`, so the wild slot ends up exactly where the
+ *   missing suit would be.
+ * - **Runs** are sorted ascending by the effective rank. The wild's effective rank comes
+ *   from `wildRepresents`, so a wild representing the in-sequence card sits between its
+ *   neighbours; a wild at an end is placed at that end. For `acesMode === 'either'` we pick
+ *   the orientation (ace-low or ace-high) that produces a consecutive sequence.
+ *
+ * Callers should validate the meld first (via {@link validateMeld}); for an invalid meld
+ * the returned order is still well-defined but not meaningful. The set of physical cards
+ * is preserved exactly.
+ */
+export function canonicalizeMeld(
+  shape: MeldShape,
+  acesMode: AcesMode,
+): { cards: Card[]; wildSlot: number | undefined } {
+  const { cards, wildSlot, wildRepresents, kind } = shape;
+  if (cards.length === 0) return { cards: [], wildSlot: undefined };
+
+  type Entry = { card: Card; effective: Card; isWild: boolean };
+  const entries: Entry[] = cards.map((c, i) => {
+    if (i === wildSlot && wildRepresents) {
+      return { card: c, effective: wildRepresents, isWild: true };
+    }
+    return { card: c, effective: c, isWild: false };
+  });
+
+  if (kind === 'set') {
+    entries.sort((a, b) => SUITS.indexOf(suitOf(a.effective)) - SUITS.indexOf(suitOf(b.effective)));
+  } else {
+    // Run. Pick the aces orientation that yields a consecutive sequence. Only `either`
+    // is ambiguous; otherwise we use the configured mode directly.
+    const modes: ('low' | 'high')[] = acesMode === 'either' ? ['high', 'low'] : [acesMode];
+    let mode: 'low' | 'high' = modes[0]!;
+    for (const m of modes) {
+      const sortedNorms = entries
+        .map((e) => normRank(rankOf(e.effective), m))
+        .sort((a, b) => a - b);
+      let consecutive = true;
+      for (let i = 1; i < sortedNorms.length; i++) {
+        if (sortedNorms[i] !== sortedNorms[i - 1]! + 1) {
+          consecutive = false;
+          break;
+        }
+      }
+      if (consecutive) {
+        mode = m;
+        break;
+      }
+    }
+    entries.sort(
+      (a, b) => normRank(rankOf(a.effective), mode) - normRank(rankOf(b.effective), mode),
+    );
+  }
+
+  const newCards = entries.map((e) => e.card);
+  const newWildSlot = wildSlot !== undefined ? entries.findIndex((e) => e.isWild) : undefined;
+  return { cards: newCards, wildSlot: newWildSlot };
 }
 
 export { normRank, parseCard };

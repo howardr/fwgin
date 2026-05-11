@@ -195,6 +195,105 @@ describe('LAY_MELD', () => {
     expect(r.result.ok).toBe(false);
   });
 
+  it('stores a run in ascending rank order regardless of input order', () => {
+    const s = setupTwoPlayer();
+    rigState(
+      s,
+      {
+        p1: ['AS', 'AC', 'AD', 'AH', '5S', '5H', '5D'],
+        p2: ['5C', '6C', '7C', '9S', 'TD', 'JD', '4H'],
+      },
+      ['KS'],
+      'KH',
+    );
+    apply(s, { type: 'DRAW_STOCK', playerId: 'p2', at: 200 });
+    const r = apply(s, {
+      type: 'LAY_MELD',
+      playerId: 'p2',
+      cards: ['7C', '5C', '6C'], // intentionally out of order
+      at: 201,
+    });
+    expect(r.result.ok).toBe(true);
+    expect(s.meldsOnTable[0]?.cards).toEqual(['5C', '6C', '7C']);
+  });
+
+  it('places a wild in a run at its represented-rank position', () => {
+    const s = setupTwoPlayer();
+    // Round 1 wild = 2. p2 holds 5H, 7H, 8H and 2D (wild) — meld is 5H W(=6H) 7H 8H.
+    rigState(
+      s,
+      {
+        p1: ['AS', 'AC', 'AD', 'AH', '5S', '5D', 'JS'],
+        p2: ['5H', '7H', '8H', '2D', 'TD', 'JD', '4H'],
+      },
+      ['KS'],
+      'KH',
+    );
+    apply(s, { type: 'DRAW_STOCK', playerId: 'p2', at: 200 });
+    const r = apply(s, {
+      type: 'LAY_MELD',
+      playerId: 'p2',
+      cards: ['2D', '8H', '5H', '7H'], // shuffled, wild first
+      wildSlot: 0,
+      wildRepresents: '6H',
+      at: 201,
+    });
+    expect(r.result.ok).toBe(true);
+    const meld = s.meldsOnTable[0]!;
+    expect(meld.cards).toEqual(['5H', '2D', '7H', '8H']);
+    expect(meld.wildSlot).toBe(1);
+    expect(meld.wildRepresents).toBe('6H');
+  });
+
+  it('places a wild representing the high end of a run at the high end', () => {
+    const s = setupTwoPlayer();
+    rigState(
+      s,
+      {
+        p1: ['AS', 'AC', 'AD', 'AH', '5S', '5D', 'JS'],
+        p2: ['5H', '6H', '7H', '2D', 'TD', 'JD', '4H'],
+      },
+      ['KS'],
+      'KH',
+    );
+    apply(s, { type: 'DRAW_STOCK', playerId: 'p2', at: 200 });
+    const r = apply(s, {
+      type: 'LAY_MELD',
+      playerId: 'p2',
+      cards: ['2D', '5H', '6H', '7H'], // wild listed first but represents 8H
+      wildSlot: 0,
+      wildRepresents: '8H',
+      at: 201,
+    });
+    expect(r.result.ok).toBe(true);
+    const meld = s.meldsOnTable[0]!;
+    expect(meld.cards).toEqual(['5H', '6H', '7H', '2D']);
+    expect(meld.wildSlot).toBe(3);
+  });
+
+  it('orders sets by canonical suit S/H/D/C', () => {
+    const s = setupTwoPlayer();
+    rigState(
+      s,
+      {
+        p1: ['AS', 'AC', 'AD', 'AH', '5S', '5H', '5D'],
+        p2: ['7D', '7C', '7S', '9S', 'TD', 'JD', '4H'],
+      },
+      ['KS'],
+      'KH',
+    );
+    apply(s, { type: 'DRAW_STOCK', playerId: 'p2', at: 200 });
+    const r = apply(s, {
+      type: 'LAY_MELD',
+      playerId: 'p2',
+      cards: ['7D', '7C', '7S'], // input is D, C, S
+      at: 201,
+    });
+    expect(r.result.ok).toBe(true);
+    // Canonical S/H/D/C order — since H is absent, the set becomes S, D, C.
+    expect(s.meldsOnTable[0]?.cards).toEqual(['7S', '7D', '7C']);
+  });
+
   it('rejects laying a meld before drawing', () => {
     const s = setupTwoPlayer();
     rigState(
@@ -310,6 +409,112 @@ describe('Layoff rules (extending opponent melds)', () => {
     });
     expect(r.result.ok).toBe(true);
     expect(sevenSet.cards).toHaveLength(4);
+  });
+
+  it('keeps a run in ascending order when extending on the high end', () => {
+    const s = lobby2({ acesMode: 'high' });
+    apply(s, { type: 'START_GAME', at: 100 });
+    s._turnState = { drewThisTurn: false };
+    rigState(
+      s,
+      {
+        p1: ['5H', '6H', '7H', 'KS', 'QC', 'JD', '5S'],
+        p2: ['8H', '4S', '4H', '4D', 'TS', 'JC', '9D'],
+      },
+      ['AS', '2S', '3S'],
+      'TC',
+    );
+    // p2 lays own meld (4-set), discards.
+    apply(s, { type: 'DRAW_STOCK', playerId: 'p2', at: 200 });
+    apply(s, { type: 'LAY_MELD', playerId: 'p2', cards: ['4S', '4H', '4D'], at: 201 });
+    apply(s, { type: 'DISCARD', playerId: 'p2', card: 'TS', at: 202 });
+    // p1 lays a run.
+    apply(s, { type: 'DRAW_STOCK', playerId: 'p1', at: 203 });
+    apply(s, { type: 'LAY_MELD', playerId: 'p1', cards: ['5H', '6H', '7H'], at: 204 });
+    apply(s, { type: 'DISCARD', playerId: 'p1', card: 'KS', at: 205 });
+    // p2 extends p1's run with 8H.
+    apply(s, { type: 'DRAW_STOCK', playerId: 'p2', at: 206 });
+    const run = s.meldsOnTable.find((m) => m.ownerId === 'p1' && m.kind === 'run')!;
+    const r = apply(s, {
+      type: 'EXTEND_MELD',
+      playerId: 'p2',
+      meldId: run.id,
+      cards: ['8H'],
+      at: 207,
+    });
+    expect(r.result.ok).toBe(true);
+    expect(run.cards).toEqual(['5H', '6H', '7H', '8H']);
+  });
+
+  it('inserts an extension card at the low end of a run', () => {
+    const s = lobby2({ acesMode: 'high' });
+    apply(s, { type: 'START_GAME', at: 100 });
+    s._turnState = { drewThisTurn: false };
+    rigState(
+      s,
+      {
+        p1: ['5H', '6H', '7H', 'KS', 'QC', 'JD', '5S'],
+        p2: ['4H', '4S', '4D', '4C', 'TS', 'JC', '9D'],
+      },
+      ['AS', '2S', '3S'],
+      'TC',
+    );
+    // p2 lays a 4-set (which contains 4H — so they keep it... wait we need 4H for layoff).
+    // Adjust: p2 lays only 3 of the 4s, keeps 4H to lay off.
+    apply(s, { type: 'DRAW_STOCK', playerId: 'p2', at: 200 });
+    apply(s, { type: 'LAY_MELD', playerId: 'p2', cards: ['4S', '4D', '4C'], at: 201 });
+    apply(s, { type: 'DISCARD', playerId: 'p2', card: 'TS', at: 202 });
+    apply(s, { type: 'DRAW_STOCK', playerId: 'p1', at: 203 });
+    apply(s, { type: 'LAY_MELD', playerId: 'p1', cards: ['5H', '6H', '7H'], at: 204 });
+    apply(s, { type: 'DISCARD', playerId: 'p1', card: 'KS', at: 205 });
+    apply(s, { type: 'DRAW_STOCK', playerId: 'p2', at: 206 });
+    const run = s.meldsOnTable.find((m) => m.ownerId === 'p1' && m.kind === 'run')!;
+    const r = apply(s, {
+      type: 'EXTEND_MELD',
+      playerId: 'p2',
+      meldId: run.id,
+      cards: ['4H'],
+      at: 207,
+    });
+    expect(r.result.ok).toBe(true);
+    expect(run.cards).toEqual(['4H', '5H', '6H', '7H']);
+  });
+
+  it('canonicalizes when extending a run with a wild', () => {
+    const s = lobby2({ acesMode: 'high' });
+    apply(s, { type: 'START_GAME', at: 100 });
+    s._turnState = { drewThisTurn: false };
+    // Round 1 wild = 2. p2 holds 2D (wild) to extend p1's run as the low end.
+    rigState(
+      s,
+      {
+        p1: ['5H', '6H', '7H', 'KS', 'QC', 'JD', '5S'],
+        p2: ['2D', '4S', '4H', '4D', 'TS', 'JC', '9D'],
+      },
+      ['AS', '3S', '8S'],
+      'TC',
+    );
+    apply(s, { type: 'DRAW_STOCK', playerId: 'p2', at: 200 });
+    apply(s, { type: 'LAY_MELD', playerId: 'p2', cards: ['4S', '4H', '4D'], at: 201 });
+    apply(s, { type: 'DISCARD', playerId: 'p2', card: 'TS', at: 202 });
+    apply(s, { type: 'DRAW_STOCK', playerId: 'p1', at: 203 });
+    apply(s, { type: 'LAY_MELD', playerId: 'p1', cards: ['5H', '6H', '7H'], at: 204 });
+    apply(s, { type: 'DISCARD', playerId: 'p1', card: 'KS', at: 205 });
+    apply(s, { type: 'DRAW_STOCK', playerId: 'p2', at: 206 });
+    const run = s.meldsOnTable.find((m) => m.ownerId === 'p1' && m.kind === 'run')!;
+    const r = apply(s, {
+      type: 'EXTEND_MELD',
+      playerId: 'p2',
+      meldId: run.id,
+      cards: ['2D'],
+      wildSlot: 0,
+      wildRepresents: '4H',
+      at: 207,
+    });
+    expect(r.result.ok).toBe(true);
+    expect(run.cards).toEqual(['2D', '5H', '6H', '7H']);
+    expect(run.wildSlot).toBe(0);
+    expect(run.wildRepresents).toBe('4H');
   });
 });
 
