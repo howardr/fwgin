@@ -1,0 +1,21 @@
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "57173dfae0cf5ad0dc28565a01e41ffe71bc33ed",
+  "prompts": {
+    "e60bf670d8b8028d": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_1fc145483ffeP6o3l55gAMQDsc",
+        "model": "anthropic/claude-opus-4-7"
+      },
+      "human_author": "Howard Rauscher",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 2,
+      "accepted_lines": 0,
+      "overriden_lines": 0
+    }
+  }
+}
