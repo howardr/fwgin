@@ -564,6 +564,18 @@ function GameOverBanner({ view }: { view: ViewForClient }) {
   );
 }
 
+/**
+ * Historical event shapes that used to exist in the {@link GameEvent} union but were
+ * removed in earlier commits. Games whose Durable Objects persisted these entries before
+ * the schema change still replay them, so we render them as readable text instead of
+ * leaking the raw JSON into the activity log. Safe to delete once all games created
+ * before commit fd27b53 have ended.
+ */
+type LegacyGameEvent =
+  | { type: 'upcard_offered'; toPlayerId: string; card: string; at: number }
+  | { type: 'upcard_accepted'; byPlayerId: string; card: string; at: number }
+  | { type: 'upcard_declined'; byPlayerId: string; at: number };
+
 function describeEvent(
   e: PlayerView['recentEvents'][number],
   players: PlayerView['players'],
@@ -571,34 +583,45 @@ function describeEvent(
   function name(id: string) {
     return players.find((p) => p.id === id)?.displayName ?? id;
   }
-  switch (e.type) {
+  // Widen to include legacy event shapes that may still live in older games' logs.
+  const evt = e as PlayerView['recentEvents'][number] | LegacyGameEvent;
+  switch (evt.type) {
     case 'game_started':
       return 'Game started.';
     case 'round_started':
-      return `Round ${e.round} started — wild is ${e.wildRank}, dealer is ${name(e.dealerId)}.`;
+      return `Round ${evt.round} started — wild is ${evt.wildRank}, dealer is ${name(evt.dealerId)}.`;
     case 'wild_stolen':
-      return `${name(e.byPlayerId)} stole a wild and surrendered ${e.surrendered}.`;
+      return `${name(evt.byPlayerId)} stole a wild and surrendered ${evt.surrendered}.`;
     case 'drew_stock':
-      return `${name(e.playerId)} drew from the stock.`;
+      return `${name(evt.playerId)} drew from the stock.`;
     case 'drew_discard':
-      return `${name(e.playerId)} took ${e.card} from the discard.`;
+      return `${name(evt.playerId)} took ${evt.card} from the discard.`;
     case 'meld_laid':
-      return `${name(e.playerId)} laid a meld: ${e.cards.join(' ')}.`;
+      return `${name(evt.playerId)} laid a meld: ${evt.cards.join(' ')}.`;
     case 'meld_extended':
-      return `${name(e.playerId)} extended a meld with ${e.cards.join(' ')}.`;
+      return `${name(evt.playerId)} extended a meld with ${evt.cards.join(' ')}.`;
     case 'discarded':
-      return `${name(e.playerId)} discarded ${e.card}.`;
+      return `${name(evt.playerId)} discarded ${evt.card}.`;
     case 'stock_reshuffled':
       return 'Stock was reshuffled from the discard.';
     case 'auto_played':
-      return `${name(e.playerId)}'s turn timer expired — auto-played ${e.discarded}.`;
+      return `${name(evt.playerId)}'s turn timer expired — auto-played ${evt.discarded}.`;
     case 'round_ended':
-      return e.winnerId
-        ? `${name(e.winnerId)} went out and won the round.`
+      return evt.winnerId
+        ? `${name(evt.winnerId)} went out and won the round.`
         : 'Round ended (no winner).';
     case 'game_ended':
-      return `Game over. Winner: ${e.winnerIds.map(name).join(', ')}.`;
+      return `Game over. Winner: ${evt.winnerIds.map(name).join(', ')}.`;
+    // Legacy upcard-offer phase, removed by commit fd27b53. Kept for backward compatibility
+    // with games whose logs were persisted before the schema change.
+    case 'upcard_offered':
+      return `Top card ${evt.card} offered to ${name(evt.toPlayerId)}.`;
+    case 'upcard_accepted':
+      return `${name(evt.byPlayerId)} took the upcard ${evt.card}.`;
+    case 'upcard_declined':
+      return `${name(evt.byPlayerId)} declined the upcard.`;
     default:
-      return JSON.stringify(e);
+      // Unknown event type — render a neutral placeholder rather than leaking raw JSON.
+      return '(unknown event)';
   }
 }
