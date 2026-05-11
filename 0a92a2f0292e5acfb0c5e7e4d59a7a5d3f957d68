@@ -1,0 +1,23 @@
+packages/frontend/src/screens/Game.tsx
+  9de5658898c1e57c 567-578,586-588,592,594,596,598,600,602,604,608,610-611,614-622,624-625
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "0a92a2f0292e5acfb0c5e7e4d59a7a5d3f957d68",
+  "prompts": {
+    "9de5658898c1e57c": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_1e88e098effepXxb1cp4Gcl1tD",
+        "model": "anthropic/claude-opus-4-7"
+      },
+      "human_author": "Howard Rauscher",
+      "messages": [],
+      "total_additions": 36,
+      "total_deletions": 13,
+      "accepted_lines": 36,
+      "overriden_lines": 0
+    }
+  }
+}
